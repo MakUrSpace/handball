@@ -1,0 +1,6 @@
+[workspace]
+members = [
+    "crates/handball-core",
+    "crates/handball-server",
+]
+resolver = "2"

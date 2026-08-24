@@ -1,0 +1,19 @@
+{
+  "name": "handball-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "aframe": "^1.5.0",
+    "lucide": "^0.344.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "vite": "^5.1.6"
+  }
+}
