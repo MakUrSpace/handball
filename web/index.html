@@ -168,7 +168,7 @@
 
       <div class="p-3 rounded-lg bg-slate-900/80 border border-slate-800">
         <h3 class="font-bold text-emerald-300 font-mono mb-1">🕹️ Touch Plus Controllers & Haptics</h3>
-        <p class="text-xs text-slate-400">Swing controller to hit the ball with haptic rumble. Trigger, Grip, or A/X buttons serve instantly. B/Y toggles Pause.</p>
+        <p class="text-xs text-slate-400">Swing either controller's contact disk into the ball for a haptic strike. To serve or reset, physically tap the controls on the left wrist with the right contact disk; selector rays and controller triggers cannot activate those wrist buttons.</p>
       </div>
 
       <div class="p-3 rounded-lg bg-slate-900/80 border border-slate-800">
@@ -208,7 +208,7 @@
         look-controls="pointerLockEnabled: false"
         wasd-controls="fly: false; acceleration: 50"
         cursor="rayOrigin: mouse"
-        raycaster="objects: .clickable, .vr-btn, [vr-button]; far: 12"
+        raycaster="objects: .clickable, .vr-btn; far: 12"
       ></a-camera>
 
       <!-- WebXR Left Hand & Controller -->
@@ -217,7 +217,7 @@
         hand-tracking-controls="hand: left; modelStyle: mesh"
         hand-tracker="hand: left"
         laser-controls="hand: left"
-        raycaster="objects: .clickable, .vr-btn, [vr-button]; far: 8; showLine: false"
+        raycaster="objects: .clickable, .vr-btn; far: 8; showLine: false"
       ></a-entity>
 
       <!-- WebXR Right Hand & Controller -->
@@ -226,7 +226,7 @@
         hand-tracking-controls="hand: right; modelStyle: mesh"
         hand-tracker="hand: right"
         laser-controls="hand: right"
-        raycaster="objects: .clickable, .vr-btn, [vr-button]; far: 8; showLine: false"
+        raycaster="objects: .clickable, .vr-btn; far: 8; showLine: false"
       ></a-entity>
     </a-entity>
 
@@ -237,28 +237,6 @@
       handball-physics="radius: 0.025; mass: 0.065"
       hand-striker="minStrikeSpeed: 0.4; powerMultiplier: 1.65; strikeRadius: 0.22"
     ></a-entity>
-
-    <!-- ================================================================= -->
-    <!-- IN-WORLD 3D VR CONTROLS (ALWAYS VISIBLE IN VR HEADSET)            -->
-    <!-- ================================================================= -->
-
-    <!-- 1. Floating Center Quick Control Bar (Compact center view) -->
-    <a-entity id="floating-quick-serve" position="0 1.10 4.8">
-      <!-- Main Serve Button -->
-      <a-entity
-        vr-button="label: 🏐 TAP / SWING TO SERVE; action: serve; color: #059669; hoverColor: #34d399; width: 0.95; height: 0.22; depth: 0.05"
-        position="0 0 0"
-      ></a-entity>
-      <!-- Quick Pause & Reset -->
-      <a-entity
-        vr-button="label: ⏸ PAUSE; action: pause; color: #d97706; hoverColor: #fbbf24; width: 0.44; height: 0.16; depth: 0.03"
-        position="-0.24 -0.22 0"
-      ></a-entity>
-      <a-entity
-        vr-button="label: 🔄 RESET; action: reset; color: #dc2626; hoverColor: #f87171; width: 0.44; height: 0.16; depth: 0.03"
-        position="0.24 -0.22 0"
-      ></a-entity>
-    </a-entity>
 
   </a-scene>
 

@@ -50,9 +50,28 @@ async fn main() {
 
     let args = Args::parse();
 
+    let web_dir = match args.web_dir.canonicalize() {
+        Ok(path) => path,
+        Err(error) => {
+            error!(
+                "Web UI directory {:?} is unavailable: {}. Build it with `nix run .#web-build`.",
+                args.web_dir, error
+            );
+            std::process::exit(1);
+        }
+    };
+    let index_html_path = web_dir.join("index.html");
+    if !index_html_path.is_file() {
+        error!(
+            "Web UI entry point {:?} is missing. Build it with `nix run .#web-build`.",
+            index_html_path
+        );
+        std::process::exit(1);
+    }
+
     info!("=======================================================");
     info!("Starting VR Handball Engine Server on port {}", args.port);
-    info!("Serving Web UI static assets from {:?}", args.web_dir);
+    info!("Serving Web UI static assets from {:?}", web_dir);
     info!("=======================================================");
 
     let engine = Arc::new(Mutex::new(HandballEngineState::new()));
@@ -93,13 +112,12 @@ async fn main() {
         }
     });
 
-    let index_html_path = args.web_dir.join("index.html");
     let app = Router::new()
         .route("/api/health", get(health_check))
         .route("/api/state", get(get_state))
         .route("/api/rpc", post(handle_rpc_endpoint))
         .route("/ws", get(ws_handler))
-        .fallback_service(ServeDir::new(&args.web_dir).fallback(ServeFile::new(index_html_path)))
+        .fallback_service(ServeDir::new(&web_dir).fallback(ServeFile::new(index_html_path)))
         .layer(axum::middleware::map_response(no_cache_response))
         .layer(CorsLayer::permissive())
         .with_state(state);

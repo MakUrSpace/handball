@@ -1,7 +1,7 @@
 /**
  * A-Frame Component: handball-hud
  * Implements 2D stadium status bar, persistent side-wall stadium kiosk,
- * dynamically tracked 3D Forearm HUD on left arm, and floating serve bar.
+ * and dynamically tracked 3D Forearm HUD on the left arm.
  */
 
 import { soundEngine } from './spatial-audio';
@@ -19,14 +19,19 @@ AFRAME.registerComponent('vr-button', {
     width: { type: 'number', default: 0.8 },
     height: { type: 'number', default: 0.22 },
     depth: { type: 'number', default: 0.04 },
+    directTouchOnly: { type: 'boolean', default: false },
   },
 
   init: function () {
     const el = this.el;
     const data = this.data;
 
-    el.classList.add('clickable');
-    el.classList.add('vr-btn');
+    if (data.directTouchOnly) {
+      el.classList.add('direct-touch-only');
+    } else {
+      el.classList.add('clickable');
+      el.classList.add('vr-btn');
+    }
 
     // 3D Button Mesh
     const box = document.createElement('a-box');
@@ -48,6 +53,7 @@ AFRAME.registerComponent('vr-button', {
     this.textEl = text;
 
     this.gameManagerEl = document.querySelector('#game-scene');
+    this.lastActivationTime = 0;
 
     // Raycaster & Laser hover styling
     el.addEventListener('mouseenter', () => {
@@ -61,11 +67,22 @@ AFRAME.registerComponent('vr-button', {
     // Interaction trigger via raycaster click or direct touch
     el.addEventListener('click', (evt: any) => {
       evt.stopPropagation?.();
+
+      // Touch controllers serve from the physical wrist control, not by
+      // squeezing the trigger while a distant Serve button is under the ray.
+      const cursorEl = evt.detail?.cursorEl;
+      const tracker = cursorEl?.components?.['hand-tracker'];
+      if (data.action === 'serve' && tracker?.inputMode === 'controller') return;
+
       this.triggerAction();
     });
   },
 
   triggerAction: function () {
+    const now = performance.now();
+    if (now - this.lastActivationTime < 180) return;
+    this.lastActivationTime = now;
+
     soundEngine.resume();
 
     // Tactile haptic push animation
@@ -262,14 +279,14 @@ AFRAME.registerComponent('handball-hud', {
 
     // Compact Touchable Serve Button on forearm
     const wristServeBtn = document.createElement('a-entity');
-    wristServeBtn.setAttribute('vr-button', 'label: 🏐 SERVE; action: serve; color: #059669; hoverColor: #34d399; width: 0.11; height: 0.045; depth: 0.015');
+    wristServeBtn.setAttribute('vr-button', 'label: 🏐 SERVE; action: serve; color: #059669; hoverColor: #34d399; width: 0.11; height: 0.045; depth: 0.015; directTouchOnly: true');
     wristServeBtn.setAttribute('position', '-0.065 -0.052 0.012');
     wristServeBtn.setAttribute('data-mounted-hand', 'left');
     wristGroup.appendChild(wristServeBtn);
 
     // Compact Touchable Reset Button on forearm
     const wristResetBtn = document.createElement('a-entity');
-    wristResetBtn.setAttribute('vr-button', 'label: 🔄 RESET; action: reset; color: #dc2626; hoverColor: #f87171; width: 0.11; height: 0.045; depth: 0.015');
+    wristResetBtn.setAttribute('vr-button', 'label: 🔄 RESET; action: reset; color: #dc2626; hoverColor: #f87171; width: 0.11; height: 0.045; depth: 0.015; directTouchOnly: true');
     wristResetBtn.setAttribute('position', '0.065 -0.052 0.012');
     wristResetBtn.setAttribute('data-mounted-hand', 'left');
     wristGroup.appendChild(wristResetBtn);
@@ -437,21 +454,27 @@ AFRAME.registerComponent('handball-hud', {
       }
     }
 
-    // 2. Track Left Forearm Position for HUD in 3D Space (positioned behind the left hand along the arm towards the player)
+    // 2. Track the left-hand forearm or mount directly beside the left controller.
     if (this.wristHudGroup && this.leftHandEl) {
+      const tracker = this.leftHandEl.components['hand-tracker'];
+      const trackerData = tracker?.getVelocityData?.();
       const handControls = this.leftHandEl.components['hand-tracking-controls'];
-      let handPos = new THREE.Vector3();
+      const handPos = new THREE.Vector3();
+      const controllerRotation = new THREE.Quaternion();
       let hasValidPose = false;
+      const isController = trackerData?.isTracked && trackerData.inputMode === 'controller';
+      const isTrackedHand = trackerData?.isTracked && trackerData.inputMode === 'hand';
 
-      if (handControls && handControls.bones && handControls.bones.length > 0) {
+      if (isController && this.leftHandEl.object3D) {
+        this.leftHandEl.object3D.getWorldPosition(handPos);
+        this.leftHandEl.object3D.getWorldQuaternion(controllerRotation);
+        hasValidPose = handPos.lengthSq() > 0.001;
+      } else if (isTrackedHand && handControls?.hasPoses && handControls.bones?.length > 0) {
         const wristBone = handControls.bones[0];
         if (wristBone) {
           wristBone.getWorldPosition(handPos);
           hasValidPose = true;
         }
-      } else if (this.leftHandEl.object3D && this.leftHandEl.object3D.visible) {
-        this.leftHandEl.object3D.getWorldPosition(handPos);
-        hasValidPose = handPos.lengthSq() > 0.001;
       }
 
       if (hasValidPose) {
@@ -466,23 +489,26 @@ AFRAME.registerComponent('handball-hud', {
         const headRight = new THREE.Vector3(1, 0, 0).applyQuaternion(camRot);
         const headUp = new THREE.Vector3(0, 1, 0).applyQuaternion(camRot);
 
-        // Approximate left shoulder position (offset left and down from head)
-        const leftShoulderPos = camPos.clone()
-          .addScaledVector(headRight, -0.24)
-          .addScaledVector(headUp, -0.24);
-
-        // Vector from hand towards left shoulder
-        const toShoulder = new THREE.Vector3().subVectors(leftShoulderPos, handPos);
-        const armExtension = toShoulder.length();
-        toShoulder.normalize();
-
-        // Position on upper arm / bicep towards shoulder (30cm back or 65% of extension)
-        const offsetDist = Math.min(0.30, armExtension * 0.65);
-        const targetPos = handPos.clone().addScaledVector(toShoulder, offsetDist);
-
-        // Add lateral offset to outer arm so it is completely out of line of sight to the hand
-        targetPos.addScaledVector(headRight, -0.07);
-        targetPos.y += 0.03;
+        let targetPos: any;
+        if (isController) {
+          // A rigid local offset keeps the panel attached to the Touch grip
+          // while leaving the contact disk and trigger unobstructed.
+          const controllerOffset = new THREE.Vector3(0.10, 0.10, 0.025)
+            .applyQuaternion(controllerRotation);
+          targetPos = handPos.clone().add(controllerOffset);
+        } else {
+          // Approximate left shoulder position (offset left and down from head).
+          const leftShoulderPos = camPos.clone()
+            .addScaledVector(headRight, -0.24)
+            .addScaledVector(headUp, -0.24);
+          const toShoulder = new THREE.Vector3().subVectors(leftShoulderPos, handPos);
+          const armExtension = toShoulder.length();
+          toShoulder.normalize();
+          const offsetDist = Math.min(0.30, armExtension * 0.65);
+          targetPos = handPos.clone().addScaledVector(toShoulder, offsetDist);
+          targetPos.addScaledVector(headRight, -0.07);
+          targetPos.y += 0.03;
+        }
 
         this.wristHudGroup.object3D.visible = true;
         this.wristHudGroup.object3D.position.copy(targetPos);
@@ -523,18 +549,5 @@ AFRAME.registerComponent('handball-hud', {
       this.wristScoreText.setAttribute('value', `PLAYER: ${snapshot.player_score} | OPP: ${snapshot.opponent_score}`);
     }
 
-    // Manage Floating Quick Bar:
-    const quickServeEl = document.querySelector('#floating-quick-serve');
-    const isInPlay = snapshot.state === 'InPlay';
-
-    if (quickServeEl) {
-      if (isInPlay) {
-        quickServeEl.setAttribute('visible', 'false');
-        quickServeEl.setAttribute('position', '0 -20 0');
-      } else {
-        quickServeEl.setAttribute('visible', 'true');
-        quickServeEl.setAttribute('position', '0 1.05 4.4');
-      }
-    }
   },
 });

@@ -38,6 +38,7 @@ export interface HandVelocityData {
   contactPoints: THREE.Vector3[];
   isTracked: boolean;
   isRecovering: boolean;
+  inputMode: 'hand' | 'controller' | 'none';
 }
 
 AFRAME.registerComponent('hand-tracker', {
@@ -45,6 +46,7 @@ AFRAME.registerComponent('hand-tracker', {
     hand: { type: 'string', default: 'right' }, // 'left' or 'right'
     colliderRadius: { type: 'number', default: 0.08 }, // Palm collision radius (8 cm)
     contactRadius: { type: 'number', default: 0.22 }, // Visible ball-contact area (22 cm)
+    controllerContactOffset: { type: 'number', default: 0.055 }, // Move disc from grip center toward controller face
     enableLaser: { type: 'boolean', default: true },
   },
 
@@ -59,6 +61,7 @@ AFRAME.registerComponent('hand-tracker', {
     this.angularVelocity = new THREE.Vector3();
     this.pointingDir = new THREE.Vector3(0, 0, -1);
     this.contactPoints = [];
+    this.inputMode = 'none';
 
     this.wasTracked = false;
     this.isTracked = false;
@@ -152,8 +155,13 @@ AFRAME.registerComponent('hand-tracker', {
   bindPinchAndClickEvents: function () {
     const onSelect = (evt: any) => {
       if (this.hoveredButton) {
-        evt?.stopPropagation?.();
         const vrBtnComp = this.hoveredButton.components?.['vr-button'];
+
+        // Controller triggers may operate ordinary 3D controls, but serving
+        // remains a physical tap on the left-wrist control.
+        if (this.inputMode === 'controller' && vrBtnComp?.data?.action === 'serve') return;
+
+        evt?.stopPropagation?.();
         if (vrBtnComp) {
           vrBtnComp.triggerAction();
         } else {
@@ -176,6 +184,7 @@ AFRAME.registerComponent('hand-tracker', {
       this.controller = null;
       this.wasTracked = false;
       this.isTracked = false;
+      this.inputMode = 'none';
       if (this.laserGroup) this.laserGroup.visible = false;
       if (this.auraMesh) this.auraMesh.visible = false;
     });
@@ -191,6 +200,7 @@ AFRAME.registerComponent('hand-tracker', {
     if (!isVisible) {
       this.wasTracked = false;
       this.isTracked = false;
+      this.inputMode = 'none';
       this.currentVelocity.set(0, 0, 0);
       this.angularVelocity.set(0, 0, 0);
       if (this.laserGroup) this.laserGroup.visible = false;
@@ -204,10 +214,22 @@ AFRAME.registerComponent('hand-tracker', {
     const rawPalmNormal = new THREE.Vector3(0, 0, -1);
     const rawPalmQuaternion = new THREE.Quaternion();
     let hasTrackedPose = false;
+    let detectedInputMode: 'hand' | 'controller' | 'none' = 'none';
 
     const handControls = this.el.components['hand-tracking-controls'];
     const trackedControls = this.el.components['tracked-controls'];
-    if (handControls && handControls.bones && handControls.bones.length > 0) {
+    const inputSource = trackedControls?.controller;
+    const hasLiveHandPose = Boolean(
+      inputSource?.hand
+      && handControls?.hasPoses
+      && handControls?.bones?.length > 0
+    );
+    const hasLiveControllerPose = Boolean(inputSource && !inputSource.hand);
+
+    // The hand mesh and its bones remain loaded when a physical controller is
+    // active. Only use those bones when WebXR reports a live XRHand pose;
+    // otherwise they contain a stale bind pose and mask the controller grip.
+    if (hasLiveHandPose) {
       const bones = handControls.bones;
       const wristBone = handControls.bones[0];
       const indexKnuckle = bones[6] || bones[5];
@@ -244,6 +266,7 @@ AFRAME.registerComponent('hand-tracker', {
           if (this.handSide === 'left') rawPalmNormal.negate();
           rawPalmQuaternion.copy(palmQuaternionFromAxes(rawPalmNormal, palmUp));
           hasTrackedPose = true;
+          detectedInputMode = 'hand';
         }
       }
 
@@ -256,20 +279,40 @@ AFRAME.registerComponent('hand-tracker', {
       if (hasTrackedPose) {
         contactPoints.push(rawPos.clone());
       }
-    } else if (this.controller || trackedControls?.controller) {
+    } else if (hasLiveControllerPose) {
       this.el.object3D.getWorldPosition(rawPos);
       const controllerOrientation = new THREE.Quaternion();
       this.el.object3D.getWorldQuaternion(controllerOrientation);
-      rawPalmNormal.set(0, 0, -1).applyQuaternion(controllerOrientation).normalize();
+
+      // Touch controller grip space is not the same as its model-specific
+      // pointing axis (Touch Plus is pitched substantially downward). Use the
+      // active selector direction as the contact-plane normal so the disk is
+      // perpendicular to the controller and parallel across the knuckles.
+      const configuredDirection = this.el.components['raycaster']?.data?.direction;
+      const localControllerNormal = configuredDirection
+        ? new THREE.Vector3(configuredDirection.x, configuredDirection.y, configuredDirection.z)
+        : new THREE.Vector3(0, 0, -1);
+      if (localControllerNormal.lengthSq() < 1e-6) localControllerNormal.set(0, 0, -1);
+      rawPalmNormal.copy(localControllerNormal)
+        .normalize()
+        .applyQuaternion(controllerOrientation)
+        .normalize();
       const controllerUp = new THREE.Vector3(0, 1, 0).applyQuaternion(controllerOrientation);
       rawPalmQuaternion.copy(palmQuaternionFromAxes(rawPalmNormal, controllerUp));
+
+      // WebXR's grip pose is centered inside the Touch controller handle.
+      // Put the visible/physical contact plane just ahead of the controller so
+      // it behaves like the palm surface rather than intersecting the handle.
+      rawPos.addScaledVector(rawPalmNormal, this.data.controllerContactOffset);
       contactPoints.push(rawPos.clone());
       hasTrackedPose = true;
+      detectedInputMode = 'controller';
     }
 
     if (!hasTrackedPose || (rawPos.x === 0 && rawPos.y === 0 && rawPos.z === 0)) {
       this.wasTracked = false;
       this.isTracked = false;
+      this.inputMode = 'none';
       this.currentVelocity.set(0, 0, 0);
       this.angularVelocity.set(0, 0, 0);
       if (this.laserGroup) this.laserGroup.visible = false;
@@ -277,10 +320,12 @@ AFRAME.registerComponent('hand-tracker', {
       return;
     }
 
+    const inputModeChanged = this.inputMode !== detectedInputMode;
+    this.inputMode = detectedInputMode;
     this.isTracked = true;
 
     // 3. Jitter-Free Exponential Moving Average (EMA) Smoothing
-    if (!this.wasTracked) {
+    if (!this.wasTracked || inputModeChanged) {
       this.wasTracked = true;
       this.currentPosition.copy(rawPos);
       this.previousPosition.copy(rawPos);
@@ -375,11 +420,12 @@ AFRAME.registerComponent('hand-tracker', {
     this.laserGroup.visible = true;
 
     // A. Gather clickable 3D buttons in the scene
-    const buttonEntities = Array.from(document.querySelectorAll('.clickable, .vr-btn, [vr-button]')) as any[];
+    const rayButtonEntities = Array.from(document.querySelectorAll('.clickable, .vr-btn')) as any[];
+    const touchButtonEntities = Array.from(document.querySelectorAll('[vr-button]')) as any[];
     const targetMeshes: THREE.Object3D[] = [];
     const meshToEntityMap = new Map<THREE.Object3D, any>();
 
-    for (const btnEl of buttonEntities) {
+    for (const btnEl of rayButtonEntities) {
       if (btnEl.object3D && this.isObjectVisible(btnEl.object3D)) {
         btnEl.object3D.traverse((child: any) => {
           if (child.isMesh) {
@@ -393,7 +439,7 @@ AFRAME.registerComponent('hand-tracker', {
     // B. Direct Finger Touch / Poke Proximity Check (< 8cm distance)
     if (now - this.lastTouchTriggerTime > 450) {
       for (const pt of this.contactPoints) {
-        for (const btnEl of buttonEntities) {
+        for (const btnEl of touchButtonEntities) {
           if (!btnEl.object3D || !this.isObjectVisible(btnEl.object3D)) continue;
 
           // Self-Touch Filter: Left hand NEVER triggers buttons mounted on the left forearm!
@@ -491,6 +537,7 @@ AFRAME.registerComponent('hand-tracker', {
       contactPoints: this.contactPoints.map((p: any) => p.clone()),
       isTracked: this.isTracked,
       isRecovering,
+      inputMode: this.inputMode,
     };
   },
 

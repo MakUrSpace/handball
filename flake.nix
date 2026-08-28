@@ -23,7 +23,14 @@
         handball-rs = rustPlatform.buildRustPackage {
           pname = "handball-server";
           version = "0.1.0";
-          src = ./.;
+          src = pkgs.lib.fileset.toSource {
+            root = ./.;
+            fileset = pkgs.lib.fileset.unions [
+              ./Cargo.toml
+              ./Cargo.lock
+              ./crates
+            ];
+          };
           cargoLock = {
             lockFile = ./Cargo.lock;
           };
@@ -32,41 +39,68 @@
           doCheck = false;
         };
 
-        handball-web-build = pkgs.writers.writeBashBin "handball-web-build" ''
-          set -euo pipefail
-          export PATH="${pkgs.nodejs}/bin:$PATH"
-          echo "=== Building VR Handball Web Application UI via Nix ==="
-          if [ ! -d "web/node_modules" ]; then
-            echo "Installing web dependencies..."
-            ${pkgs.nodejs}/bin/npm --prefix web install
-          fi
-          ${pkgs.nodejs}/bin/npm --prefix web run build
-        '';
+        handball-web = pkgs.buildNpmPackage {
+          pname = "handball-web";
+          version = "0.1.0";
+          src = pkgs.lib.fileset.toSource {
+            root = ./web;
+            fileset = pkgs.lib.fileset.unions [
+              ./web/package.json
+              ./web/package-lock.json
+              ./web/tsconfig.json
+              ./web/vite.config.ts
+              ./web/index.html
+              ./web/src
+            ];
+          };
+          npmDepsHash = "sha256-8c7/iYQAr+koJwY+R1VtIAm/Gvh7iCGIUoCgfe6PF4g=";
+          npmDepsFetcherVersion = 2;
+          makeCacheWritable = true;
+          forceGitDeps = true;
 
-        handball-app = pkgs.writers.writeBashBin "handball-app" ''
-          set -euo pipefail
-          echo "Ensuring web application build..."
-          ${handball-web-build}/bin/handball-web-build
+          installPhase = ''
+            runHook preInstall
+            mkdir -p "$out"
+            cp -r dist/. "$out/"
+            runHook postInstall
+          '';
+        };
 
-          PORT="''${PORT:-8080}"
-          echo "Starting VR Handball Engine Server on port $PORT..."
-          exec ${pkgs.cargo}/bin/cargo run --manifest-path Cargo.toml --bin handball-server -- --port "$PORT" --web-dir ./web/dist "$@"
-        '';
+        handball-web-report = pkgs.writeShellApplication {
+          name = "handball-web-build";
+          text = ''
+            echo "VR Handball Web UI is available at ${handball-web}"
+          '';
+        };
 
-        handball-test = pkgs.writers.writeBashBin "handball-test-suite" ''
-          set -euo pipefail
-          echo "=== Running Handball Rust Workspace Cargo Tests ==="
-          ${pkgs.cargo}/bin/cargo test --workspace
+        handball-app = pkgs.writeShellApplication {
+          name = "handball-app";
+          text = ''
+            PORT="''${PORT:-8080}"
+            echo "Starting VR Handball Engine Server on port $PORT..."
+            exec ${handball-rs}/bin/handball-server \
+              --port "$PORT" \
+              --web-dir ${handball-web} \
+              "$@"
+          '';
+        };
 
-          echo "=== Building Web Application UI via Nix ==="
-          ${handball-web-build}/bin/handball-web-build
+        handball-test = pkgs.writeShellApplication {
+          name = "handball-test-suite";
+          text = ''
+            PORT="''${PORT:-18080}"
+            ${handball-rs}/bin/handball-server \
+              --port "$PORT" \
+              --web-dir ${handball-web} &
+            SERVER_PID="$!"
+            trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT INT TERM
 
-          echo "=== Running E2E API Verification Tests ==="
-          if [ -f "./tests/e2e_web_test.py" ]; then
-            ${pkgs.python3}/bin/python3 ./tests/e2e_web_test.py
-          fi
-          echo "=== All VR Handball Tests Passed Successfully ==="
-        '';
+            sleep 1
+            ${pkgs.python3}/bin/python3 ${./tests/e2e_web_test.py} "http://127.0.0.1:$PORT"
+            ${pkgs.python3}/bin/python3 ${./tests/test_physics_math.py}
+            echo "=== All packaged Handball tests passed successfully ==="
+          '';
+        };
 
         register-ngrok = pkgs.writeShellApplication {
           name = "register-ngrok";
@@ -83,17 +117,33 @@
 
         handball-ngrok = pkgs.writeShellApplication {
           name = "handball-ngrok";
-          runtimeInputs = [ pkgs.ngrok pkgs.tmux pkgs.cargo pkgs.nodejs ];
+          runtimeInputs = [ pkgs.ngrok pkgs.tmux ];
           text = ''
+            set -euo pipefail
             SESSION_NAME="handball-vr"
             PORT="''${PORT:-8080}"
-            DOMAIN="''${1:-harmony.ngrok.app}"
+
+            if [ "''${1:-}" = "--check" ]; then
+              test -x ${handball-rs}/bin/handball-server
+              test -f ${handball-web}/index.html
+              echo "Handball ngrok closure is complete."
+              echo "Server: ${handball-rs}/bin/handball-server"
+              echo "Web UI: ${handball-web}"
+              exit 0
+            fi
+
+            DOMAIN="''${1:-musingsole.ngrok.app}"
 
             echo "=== VR Handball Quest 3 HTTPS Tunnel Setup ==="
             echo "Local Port: $PORT"
             echo "Domain: https://$DOMAIN"
+            echo "Web UI: ${handball-web}"
 
             NGROK_CMD="ngrok http $PORT --domain=$DOMAIN"
+            printf -v SERVER_CMD '%q ' \
+              ${handball-rs}/bin/handball-server \
+              --port "$PORT" \
+              --web-dir ${handball-web}
 
             CURRENT_PANE="$(tmux display-message -p '#{pane_id}' 2>/dev/null || true)"
 
@@ -109,7 +159,9 @@
               trap cleanup EXIT INT TERM
 
               # Run the handball server in the current foreground pane
-              cargo run --manifest-path Cargo.toml --bin handball-server -- --port "$PORT"
+              ${handball-rs}/bin/handball-server \
+                --port "$PORT" \
+                --web-dir ${handball-web}
             else
               if tmux has-session -t "$SESSION_NAME" 2>/dev/null; then
                 echo "Refreshing '$SESSION_NAME' session with latest build..."
@@ -120,7 +172,7 @@
               echo "Starting Handball Server and ngrok HTTPS tunnel in tmux session '$SESSION_NAME'..."
 
               tmux new-session -d -s "$SESSION_NAME" -n "handball-server" \
-                "cargo run --manifest-path Cargo.toml --bin handball-server -- --port $PORT; read"
+                "$SERVER_CMD; read"
 
               tmux split-window -t "$SESSION_NAME:0" -h \
                 "echo 'Exposing VR Handball on https://$DOMAIN -> $PORT'; $NGROK_CMD; read"
@@ -138,7 +190,8 @@
         };
       in {
         packages.handball-rs = handball-rs;
-        packages.web-build = handball-web-build;
+        packages.handball-web = handball-web;
+        packages.web-build = handball-web;
         packages.default = handball-app;
         packages.tests = handball-test;
         packages.test = handball-test;
@@ -157,7 +210,7 @@
 
         apps.web-build = {
           type = "app";
-          program = "${self'.packages.web-build}/bin/handball-web-build";
+          program = "${handball-web-report}/bin/handball-web-build";
         };
 
         apps.handball-ngrok = {

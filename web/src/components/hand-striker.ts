@@ -48,15 +48,25 @@ AFRAME.registerComponent('hand-striker', {
 
     // Desktop fallback strike trigger (Click or Spacebar)
     window.addEventListener('keydown', (e: KeyboardEvent) => {
-      if (e.code === 'Space') {
+      if (e.code === 'Space' && !this.isImmersiveSessionActive()) {
         this.triggerDesktopStrike();
       }
     });
 
     window.addEventListener('mousedown', (e: MouseEvent) => {
+      if (this.isImmersiveSessionActive()) return;
       if ((e.target as HTMLElement)?.closest('.game-ui-btn') || (e.target as HTMLElement)?.closest('#help-modal')) return;
       this.triggerDesktopStrike();
     });
+  },
+
+  isImmersiveSessionActive: function () {
+    const scene = this.el.sceneEl || document.querySelector('#game-scene');
+    return Boolean(
+      scene?.is?.('vr-mode')
+      || scene?.is?.('ar-mode')
+      || scene?.renderer?.xr?.isPresenting
+    );
   },
 
   tick: function () {
@@ -238,6 +248,8 @@ AFRAME.registerComponent('hand-striker', {
   },
 
   triggerDesktopStrike: function () {
+    if (this.isImmersiveSessionActive()) return;
+
     const ballPhysics = this.el.components['handball-physics'];
     if (!ballPhysics || !ballPhysics.data.active) return;
 
