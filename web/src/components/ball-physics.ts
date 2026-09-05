@@ -16,12 +16,14 @@ AFRAME.registerComponent('handball-physics', {
     radius: { type: 'number', default: 0.025 },
     mass: { type: 'number', default: 0.065 },
     gravity: { type: 'number', default: -9.81 },
-    airDrag: { type: 'number', default: 0.002 },
+    airDrag: { type: 'number', default: 0.0012 },
     spinDrag: { type: 'number', default: 0.45 },
     magnusCoefficient: { type: 'number', default: 0.0045 },
     frontWallRestitution: { type: 'number', default: 0.93 },
     sideWallRestitution: { type: 'number', default: 0.88 },
-    floorRestitution: { type: 'number', default: 0.85 },
+    floorRestitution: { type: 'number', default: 0.92 },
+    floorFriction: { type: 'number', default: 0.985 },
+    rollingDrag: { type: 'number', default: 0.4 },
     ceilingRestitution: { type: 'number', default: 0.82 },
     backWallRestitution: { type: 'number', default: 0.86 },
     isHeld: { type: 'boolean', default: false },
@@ -181,14 +183,24 @@ AFRAME.registerComponent('handball-physics', {
     if (pos.y - radius <= 0) {
       const impactSpeed = Math.abs(vel.y);
       pos.y = radius;
-      vel.y = -vel.y * this.data.floorRestitution;
-      vel.x *= 0.94; // Court friction
-      vel.z *= 0.94;
-      this.angularVelocity.multiplyScalar(0.88);
-
-      if (Math.abs(vel.y) < 0.12 && Math.abs(vel.x) < 0.05 && Math.abs(vel.z) < 0.05) {
-        vel.set(0, 0, 0);
+      if (impactSpeed < 0.22) {
+        // Once a bounce is genuinely spent, transition to rolling with a
+        // time-based drag. This avoids applying a large friction penalty on
+        // every floor-constrained physics substep.
+        vel.y = 0;
+        const rollingFactor = Math.exp(-this.data.rollingDrag * dt);
+        vel.x *= rollingFactor;
+        vel.z *= rollingFactor;
+        this.angularVelocity.multiplyScalar(Math.exp(-0.25 * dt));
+        if (Math.hypot(vel.x, vel.z) < 0.015) {
+          vel.x = 0;
+          vel.z = 0;
+        }
       } else {
+        vel.y = impactSpeed * this.data.floorRestitution;
+        vel.x *= this.data.floorFriction;
+        vel.z *= this.data.floorFriction;
+        this.angularVelocity.multiplyScalar(0.95);
         soundEngine.playFloorBounce(impactSpeed);
         this.bouncesSinceStrike++;
         this.emitCollision('floor', impactSpeed, pos);

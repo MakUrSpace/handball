@@ -113,11 +113,20 @@ AFRAME.registerComponent('vr-button', {
           this.textEl.setAttribute('value', soundEngine.enabled ? '🔊 AUDIO ON' : '🔇 AUDIO OFF');
         }
         break;
-      case 'bot':
-        gm.data.autoRallyBot = !gm.data.autoRallyBot;
-        if (this.textEl) {
-          this.textEl.setAttribute('value', gm.data.autoRallyBot ? '🤖 BOT: ON' : '🤖 BOT: OFF');
+      case 'freeplay':
+        {
+          const enabled = gm.toggleFreeplay();
+          const label = enabled ? '∞ FREEPLAY: ON' : '∞ FREEPLAY: OFF';
+          document.querySelectorAll('[vr-button*="action: freeplay"]').forEach((btn: any) => {
+            const txt = btn.querySelector('a-text');
+            if (txt) txt.setAttribute('value', label);
+          });
+          const domButton = document.getElementById('btn-freeplay');
+          if (domButton) domButton.textContent = label;
         }
+        break;
+      case 'difficulty':
+        gm.cycleBotDifficulty();
         break;
       case 'kiosk': {
         const courtEl = document.querySelector('[handball-court]') as any;
@@ -233,19 +242,19 @@ AFRAME.registerComponent('handball-hud', {
     const wristGroup = document.createElement('a-entity');
     wristGroup.setAttribute('id', 'wrist-hud-group');
     wristGroup.setAttribute('data-mounted-hand', 'left');
-    wristGroup.setAttribute('scale', '0.45 0.45 0.45');
+    wristGroup.setAttribute('scale', '0.55 0.55 0.55');
 
     // Base plate
     const watchBg = document.createElement('a-plane');
-    watchBg.setAttribute('width', '0.28');
-    watchBg.setAttribute('height', '0.19');
+    watchBg.setAttribute('width', '0.34');
+    watchBg.setAttribute('height', '0.27');
     watchBg.setAttribute('material', 'color: #090d16; shader: flat; opacity: 0.96; side: double');
     wristGroup.appendChild(watchBg);
 
     // Neon Cyan outline
     const border = document.createElement('a-plane');
-    border.setAttribute('width', '0.30');
-    border.setAttribute('height', '0.21');
+    border.setAttribute('width', '0.36');
+    border.setAttribute('height', '0.29');
     border.setAttribute('position', '0 0 -0.002');
     border.setAttribute('material', 'color: #0284c7; shader: flat; side: double');
     wristGroup.appendChild(border);
@@ -254,7 +263,7 @@ AFRAME.registerComponent('handball-hud', {
     const titleText = document.createElement('a-text');
     titleText.setAttribute('value', 'VR HANDBALL');
     titleText.setAttribute('align', 'center');
-    titleText.setAttribute('position', '0 0.068 0.01');
+    titleText.setAttribute('position', '0 0.108 0.01');
     titleText.setAttribute('color', '#38bdf8');
     titleText.setAttribute('width', '0.75');
     wristGroup.appendChild(titleText);
@@ -263,7 +272,7 @@ AFRAME.registerComponent('handball-hud', {
     this.wristScoreText = document.createElement('a-text');
     this.wristScoreText.setAttribute('value', 'PLAYER: 0 | OPP: 0');
     this.wristScoreText.setAttribute('align', 'center');
-    this.wristScoreText.setAttribute('position', '0 0.028 0.01');
+    this.wristScoreText.setAttribute('position', '0 0.066 0.01');
     this.wristScoreText.setAttribute('color', '#f8fafc');
     this.wristScoreText.setAttribute('width', '0.9');
     wristGroup.appendChild(this.wristScoreText);
@@ -272,22 +281,38 @@ AFRAME.registerComponent('handball-hud', {
     this.wristSpeedText = document.createElement('a-text');
     this.wristSpeedText.setAttribute('value', 'SPEED: 0.0 MPH');
     this.wristSpeedText.setAttribute('align', 'center');
-    this.wristSpeedText.setAttribute('position', '0 -0.008 0.01');
+    this.wristSpeedText.setAttribute('position', '0 0.026 0.01');
     this.wristSpeedText.setAttribute('color', '#fbbf24');
     this.wristSpeedText.setAttribute('width', '0.85');
     wristGroup.appendChild(this.wristSpeedText);
 
+    this.wristRallyText = document.createElement('a-text');
+    this.wristRallyText.setAttribute('value', 'RALLY: 0 | CENTER: 0');
+    this.wristRallyText.setAttribute('align', 'center');
+    this.wristRallyText.setAttribute('position', '0 -0.012 0.01');
+    this.wristRallyText.setAttribute('color', '#6ee7b7');
+    this.wristRallyText.setAttribute('width', '0.92');
+    wristGroup.appendChild(this.wristRallyText);
+
+    this.wristModeText = document.createElement('a-text');
+    this.wristModeText.setAttribute('value', 'IDLE | BOT ACTIVE');
+    this.wristModeText.setAttribute('align', 'center');
+    this.wristModeText.setAttribute('position', '0 -0.048 0.01');
+    this.wristModeText.setAttribute('color', '#c4b5fd');
+    this.wristModeText.setAttribute('width', '0.86');
+    wristGroup.appendChild(this.wristModeText);
+
     // Compact Touchable Serve Button on forearm
     const wristServeBtn = document.createElement('a-entity');
     wristServeBtn.setAttribute('vr-button', 'label: 🏐 SERVE; action: serve; color: #059669; hoverColor: #34d399; width: 0.11; height: 0.045; depth: 0.015; directTouchOnly: true');
-    wristServeBtn.setAttribute('position', '-0.065 -0.052 0.012');
+    wristServeBtn.setAttribute('position', '-0.065 -0.092 0.012');
     wristServeBtn.setAttribute('data-mounted-hand', 'left');
     wristGroup.appendChild(wristServeBtn);
 
     // Compact Touchable Reset Button on forearm
     const wristResetBtn = document.createElement('a-entity');
     wristResetBtn.setAttribute('vr-button', 'label: 🔄 RESET; action: reset; color: #dc2626; hoverColor: #f87171; width: 0.11; height: 0.045; depth: 0.015; directTouchOnly: true');
-    wristResetBtn.setAttribute('position', '0.065 -0.052 0.012');
+    wristResetBtn.setAttribute('position', '0.065 -0.092 0.012');
     wristResetBtn.setAttribute('data-mounted-hand', 'left');
     wristGroup.appendChild(wristResetBtn);
 
@@ -304,6 +329,8 @@ AFRAME.registerComponent('handball-hud', {
     const btnPause = document.getElementById('btn-pause');
     const btnReset = document.getElementById('btn-reset');
     const btnAudio = document.getElementById('btn-audio');
+    const btnFreeplay = document.getElementById('btn-freeplay');
+    const btnBotDifficulty = document.getElementById('btn-bot-difficulty');
 
     btnStart?.addEventListener('click', () => {
       soundEngine.resume();
@@ -328,6 +355,16 @@ AFRAME.registerComponent('handball-hud', {
       if (btnAudio) {
         btnAudio.textContent = soundEngine.enabled ? '🔊 AUDIO ON' : '🔇 AUDIO MUTED';
       }
+    });
+
+    btnFreeplay?.addEventListener('click', () => {
+      const gm = this.getGameManager();
+      if (!gm) return;
+      gm.toggleFreeplay();
+    });
+
+    btnBotDifficulty?.addEventListener('click', () => {
+      this.getGameManager()?.cycleBotDifficulty();
     });
 
     const btnMode = document.getElementById('btn-mode');
@@ -433,6 +470,27 @@ AFRAME.registerComponent('handball-hud', {
   },
 
   tick: function () {
+    const gm = this.getGameManager();
+
+    // Court mode/theme changes rebuild the kiosk. Keep this label sourced from
+    // live game state so a rebuilt button cannot fall back to its OFF markup.
+    const freeplayLabel = gm?.data.freeplay ? '∞ FREEPLAY: ON' : '∞ FREEPLAY: OFF';
+    document.querySelectorAll('[vr-button*="action: freeplay"]').forEach((btn: any) => {
+      const txt = btn.components?.['vr-button']?.textEl || btn.querySelector('a-text');
+      if (txt?.getAttribute('value') !== freeplayLabel) txt?.setAttribute('value', freeplayLabel);
+    });
+
+    const botDifficulty = gm?.getBot?.()?.getDifficultyInfo?.().label || 'MEDIUM';
+    const difficultyLabel = `BOT: ${botDifficulty}`;
+    document.querySelectorAll('[vr-button*="action: difficulty"]').forEach((btn: any) => {
+      const txt = btn.components?.['vr-button']?.textEl || btn.querySelector('a-text');
+      if (txt?.getAttribute('value') !== difficultyLabel) txt?.setAttribute('value', difficultyLabel);
+    });
+    const domDifficultyButton = document.getElementById('btn-bot-difficulty');
+    if (domDifficultyButton && domDifficultyButton.textContent?.trim() !== `🤖 ${difficultyLabel}`) {
+      domDifficultyButton.textContent = `🤖 ${difficultyLabel}`;
+    }
+
     // 1. Update Ball Speedometer & Kiosk Text
     if (this.ballEl) {
       const physics = this.ballEl.components['handball-physics'];
@@ -447,9 +505,14 @@ AFRAME.registerComponent('handball-hud', {
         }
         const kioskInfo = document.querySelector('#kiosk-info-text');
         if (kioskInfo) {
-          const gm = this.getGameManager();
-          const rally = gm ? gm.currentRallyShots : 0;
-          kioskInfo.setAttribute('value', `SPEED: ${speedMph.toFixed(1)} MPH   •   RALLY: ${rally}`);
+          kioskInfo.setAttribute('value', `SPEED: ${speedMph.toFixed(1)} MPH`);
+        }
+        const kioskStats = document.querySelector('#kiosk-stats-text');
+        if (kioskStats) {
+          const rally = gm?.currentRallyShots ?? 0;
+          const centerHits = gm?.stats.center_wall_hits ?? 0;
+          const mode = gm?.data.freeplay ? 'FREEPLAY' : `BOT ${botDifficulty}`;
+          kioskStats.setAttribute('value', `RALLY: ${rally}  •  CENTER: ${centerHits}  •  ${mode}`);
         }
       }
     }
@@ -527,26 +590,82 @@ AFRAME.registerComponent('handball-hud', {
     const statusBadgeEl = document.getElementById('hud-status-badge');
     const eventMsgEl = document.getElementById('hud-event-msg');
     const maxSpeedEl = document.getElementById('hud-max-speed');
+    const centerHitsEl = document.getElementById('hud-center-hits');
+    const totalRalliesEl = document.getElementById('hud-total-rallies');
+    const botStateEl = document.getElementById('hud-bot-state');
+    const freeplayStateEl = document.getElementById('hud-freeplay-state');
 
     if (scorePlayerEl) scorePlayerEl.textContent = snapshot.player_score.toString();
     if (scoreOpponentEl) scoreOpponentEl.textContent = snapshot.opponent_score.toString();
     if (rallyEl) rallyEl.textContent = snapshot.current_rally.toString();
     if (maxSpeedEl) maxSpeedEl.textContent = `${snapshot.stats.max_ball_speed_mph.toFixed(1)} MPH`;
+    if (centerHitsEl) centerHitsEl.textContent = (snapshot.stats.center_wall_hits ?? 0).toString();
+    if (totalRalliesEl) totalRalliesEl.textContent = snapshot.stats.total_rallies.toString();
+    if (botStateEl) {
+      botStateEl.textContent = snapshot.bot_enabled
+        ? `ACTIVE • ${snapshot.bot_difficulty || 'MEDIUM'}`
+        : 'OFF';
+      botStateEl.className = snapshot.bot_enabled ? 'text-violet-300' : 'text-slate-300';
+    }
+    if (freeplayStateEl) {
+      freeplayStateEl.textContent = snapshot.freeplay_enabled ? 'ACTIVE' : 'OFF';
+      freeplayStateEl.className = snapshot.freeplay_enabled ? 'text-emerald-300' : 'text-slate-300';
+    }
+
+    const freeplayLabel = snapshot.freeplay_enabled ? '∞ FREEPLAY: ON' : '∞ FREEPLAY: OFF';
+    const freeplayButton = document.getElementById('btn-freeplay');
+    if (freeplayButton) freeplayButton.textContent = freeplayLabel;
+    document.querySelectorAll('[vr-button*="action: freeplay"]').forEach((btn: any) => {
+      const txt = btn.querySelector('a-text');
+      if (txt) txt.setAttribute('value', freeplayLabel);
+    });
+    const difficultyLabel = `BOT: ${snapshot.bot_difficulty || 'MEDIUM'}`;
+    const difficultyButton = document.getElementById('btn-bot-difficulty');
+    if (difficultyButton) difficultyButton.textContent = `🤖 ${difficultyLabel}`;
+    document.querySelectorAll('[vr-button*="action: difficulty"]').forEach((btn: any) => {
+      const txt = btn.components?.['vr-button']?.textEl || btn.querySelector('a-text');
+      if (txt) txt.setAttribute('value', difficultyLabel);
+    });
     if (eventMsgEl) eventMsgEl.textContent = snapshot.last_event_message;
 
     if (statusBadgeEl) {
       statusBadgeEl.textContent = snapshot.state.toUpperCase();
+      const isLive = snapshot.state === 'InPlay';
+      const isPoint = snapshot.state === 'PointScored';
+      statusBadgeEl.className = `px-3 py-1 rounded-full text-xs font-mono font-bold border ${
+        isLive
+          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 glow-emerald'
+          : isPoint
+            ? 'bg-violet-500/20 text-violet-300 border-violet-500/40 glow-purple'
+            : 'bg-sky-500/20 text-sky-400 border-sky-500/40 glow-cyan'
+      }`;
     }
 
     // In-World 3D VR Kiosk updates (mounted on left wall in court geometry)
     const kioskScore = document.querySelector('#kiosk-score-text');
     if (kioskScore) {
-      kioskScore.setAttribute('value', `PLAYER: ${snapshot.player_score}   |   OPPONENT: ${snapshot.opponent_score}`);
+      kioskScore.setAttribute(
+        'value',
+        snapshot.freeplay_enabled
+          ? 'FREEPLAY   •   SCORE LOCKED'
+          : `PLAYER: ${snapshot.player_score}   |   ${snapshot.bot_enabled ? 'BOT' : 'OPPONENT'}: ${snapshot.opponent_score}`
+      );
     }
 
     // 3D Forearm HUD updates
     if (this.wristScoreText) {
-      this.wristScoreText.setAttribute('value', `PLAYER: ${snapshot.player_score} | OPP: ${snapshot.opponent_score}`);
+      this.wristScoreText.setAttribute('value', `YOU: ${snapshot.player_score} | ${snapshot.bot_enabled ? 'BOT' : 'OPP'}: ${snapshot.opponent_score}`);
+    }
+    if (this.wristRallyText) {
+      this.wristRallyText.setAttribute('value', `RALLY: ${snapshot.current_rally} | CENTER: ${snapshot.stats.center_wall_hits ?? 0}`);
+    }
+    if (this.wristModeText) {
+      this.wristModeText.setAttribute(
+        'value',
+        snapshot.freeplay_enabled
+          ? 'FREEPLAY | RULES OFF'
+          : `${snapshot.state.toUpperCase()} | ${snapshot.bot_enabled ? 'BOT ACTIVE' : 'RULES ON'}`
+      );
     }
 
   },

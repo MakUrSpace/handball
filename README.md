@@ -36,6 +36,13 @@
    - 3D spatial wrist watch HUD on left wrist in VR.
    - 2D Stadium Status bar (Score, Speedometer in MPH, Rally Counter, Status Badge, Controls).
    - WebSocket real-time sync with Axum server.
+6. **Rally Scoring & Practice Bot**:
+   - Every rally resolves from shot ownership: a miss before the front wall loses the rally, while an unreturned legal shot wins on the second bounce.
+   - Center-target hits are tracked separately for player and opponent as an accuracy stat.
+   - Visible practice bot is the default rules mode: it reads incoming trajectories, moves within human-like reaction and reach limits, and returns shots it can get to.
+   - Freeplay mode disables the bot and all rally faults/point resolution while continuing to count rally shots, speed, and center-target accuracy. Turning Freeplay off restores bot play automatically.
+   - When the wall kiosk is visible, a companion right-wall panel explains bot scoring, legal returns, center accuracy, and how to beat the bot.
+   - Expanded front-wall scoreboard and forearm HUD keep score, rally length, center hits, match state, speed, and bot mode visible in VR.
 
 ---
 

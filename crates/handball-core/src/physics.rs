@@ -126,7 +126,7 @@ pub struct PhysicsConfig {
     pub air_drag: f32,            // Drag coefficient
     pub front_wall_restitution: f32, // 0.93
     pub side_wall_restitution: f32,  // 0.88
-    pub floor_restitution: f32,      // 0.85
+    pub floor_restitution: f32,      // 0.92
     pub ceiling_restitution: f32,    // 0.82
     pub back_wall_restitution: f32,  // 0.86
 }
@@ -135,10 +135,10 @@ impl Default for PhysicsConfig {
     fn default() -> Self {
         Self {
             gravity: -9.81,
-            air_drag: 0.002,
+            air_drag: 0.0012,
             front_wall_restitution: 0.93,
             side_wall_restitution: 0.88,
-            floor_restitution: 0.85,
+            floor_restitution: 0.92,
             ceiling_restitution: 0.82,
             back_wall_restitution: 0.86,
         }
@@ -252,21 +252,31 @@ impl PhysicsEngine {
         if ball.position.y - ball.radius <= self.court.min_y() {
             let impact_speed = ball.velocity.y.abs();
             ball.position.y = self.court.min_y() + ball.radius;
-            ball.velocity.y = -ball.velocity.y * self.config.floor_restitution;
-            ball.velocity.x *= 0.95; // Floor rolling resistance
-            ball.velocity.z *= 0.95;
-            
-            // Resting threshold
-            if ball.velocity.y.abs() < 0.15 {
+            if impact_speed < 0.22 {
                 ball.velocity.y = 0.0;
-            }
+                let rolling_factor = (-0.4 * dt).exp();
+                ball.velocity.x *= rolling_factor;
+                ball.velocity.z *= rolling_factor;
+                ball.spin = ball.spin * (-0.25 * dt).exp();
+                if (ball.velocity.x * ball.velocity.x + ball.velocity.z * ball.velocity.z).sqrt()
+                    < 0.015
+                {
+                    ball.velocity.x = 0.0;
+                    ball.velocity.z = 0.0;
+                }
+            } else {
+                ball.velocity.y = impact_speed * self.config.floor_restitution;
+                ball.velocity.x *= 0.985;
+                ball.velocity.z *= 0.985;
+                ball.spin = ball.spin * 0.95;
 
-            events.push(CollisionEvent {
-                surface: WallSurface::Floor,
-                point: ball.position,
-                impact_speed,
-                normal: Vec3::new(0.0, 1.0, 0.0),
-            });
+                events.push(CollisionEvent {
+                    surface: WallSurface::Floor,
+                    point: ball.position,
+                    impact_speed,
+                    normal: Vec3::new(0.0, 1.0, 0.0),
+                });
+            }
         }
 
         // 6. Ceiling (y = court.height, normal = [0, -1, 0])

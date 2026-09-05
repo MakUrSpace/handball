@@ -137,6 +137,8 @@ AFRAME.registerComponent('handball-court', {
     this.data.kioskVisible = visible;
     const kiosk = this.courtGroup?.querySelector?.('#in-world-vr-menu');
     if (kiosk) kiosk.setAttribute('visible', visible.toString());
+    const botRules = this.courtGroup?.querySelector?.('#bot-rules-panel');
+    if (botRules) botRules.setAttribute('visible', visible.toString());
 
     const label = visible ? '✕ HIDE KIOSK' : '☰ SHOW KIOSK';
     const kioskToggle = document.getElementById('wall-kiosk-toggle') as any;
@@ -252,11 +254,20 @@ AFRAME.registerComponent('handball-court', {
 
     // Front Wall Target Accent Ring
     const frontWallTarget = document.createElement('a-ring');
+    frontWallTarget.setAttribute('id', 'front-wall-target');
     frontWallTarget.setAttribute('position', `0 1.2 0.01`);
     frontWallTarget.setAttribute('radius-inner', (isNarrow ? 0.35 : 0.6).toString());
     frontWallTarget.setAttribute('radius-outer', (isNarrow ? 0.4 : 0.65).toString());
     frontWallTarget.setAttribute('material', `color: #fde047; shader: flat; opacity: ${isPassthrough || isNeon ? 0.95 : 0.8}; transparent: true`);
     courtGroup.appendChild(frontWallTarget);
+
+    const targetLabel = document.createElement('a-text');
+    targetLabel.setAttribute('value', 'CENTER');
+    targetLabel.setAttribute('align', 'center');
+    targetLabel.setAttribute('position', '0 1.19 0.012');
+    targetLabel.setAttribute('color', '#d97706');
+    targetLabel.setAttribute('width', (isNarrow ? 1.1 : 1.7).toString());
+    courtGroup.appendChild(targetLabel);
 
     // 4. Left Wall (x = -halfW) - Transparent Yellow Bouncing Barrier
     const leftWall = document.createElement('a-plane');
@@ -441,11 +452,11 @@ AFRAME.registerComponent('handball-court', {
     // 9. Floating Digital Scoreboard above Front Wall
     const scoreboard = document.createElement('a-entity');
     scoreboard.setAttribute('id', 'arena-scoreboard');
-    scoreboard.setAttribute('position', `0 ${height - 0.8} 0.15`);
+    scoreboard.setAttribute('position', `0 ${height - 0.92} 0.15`);
 
     const boardBg = document.createElement('a-plane');
     boardBg.setAttribute('width', (isNarrow ? 2.1 : 4.0).toString());
-    boardBg.setAttribute('height', '0.9');
+    boardBg.setAttribute('height', '1.42');
     boardBg.setAttribute('material', `color: #0f172a; shader: flat; opacity: ${isPassthrough ? 0.7 : 0.9}; transparent: true`);
     scoreboard.appendChild(boardBg);
 
@@ -453,19 +464,37 @@ AFRAME.registerComponent('handball-court', {
     scoreText.setAttribute('id', 'scoreboard-text');
     scoreText.setAttribute('value', isPassthrough ? 'MR PASSTHROUGH // HANDBALL' : (isNarrow ? 'VR HANDBALL // NARROW' : 'VR HANDBALL // REGULATION'));
     scoreText.setAttribute('align', 'center');
-    scoreText.setAttribute('position', '0 0.15 0.05');
+    scoreText.setAttribute('position', '0 0.53 0.05');
     scoreText.setAttribute('color', '#38bdf8');
-    scoreText.setAttribute('width', (isNarrow ? 3.0 : 5.5).toString());
+    scoreText.setAttribute('width', (isNarrow ? 1.82 : 3.55).toString());
+    scoreText.setAttribute('wrap-count', isNarrow ? '32' : '48');
     scoreboard.appendChild(scoreText);
 
     const scoreDigits = document.createElement('a-text');
     scoreDigits.setAttribute('id', 'scoreboard-digits');
     scoreDigits.setAttribute('value', 'PLAYER: 0  |  OPPONENT: 0');
     scoreDigits.setAttribute('align', 'center');
-    scoreDigits.setAttribute('position', '0 -0.15 0.05');
+    scoreDigits.setAttribute('position', '0 0.20 0.05');
     scoreDigits.setAttribute('color', '#f8fafc');
-    scoreDigits.setAttribute('width', (isNarrow ? 3.2 : 6.0).toString());
+    scoreDigits.setAttribute('width', (isNarrow ? 1.88 : 3.70).toString());
+    scoreDigits.setAttribute('wrap-count', isNarrow ? '30' : '44');
     scoreboard.appendChild(scoreDigits);
+
+    const makeScoreLine = (id: string, value: string, y: number, color: string, textWidth: number) => {
+      const line = document.createElement('a-text');
+      line.setAttribute('id', id);
+      line.setAttribute('value', value);
+      line.setAttribute('align', 'center');
+      line.setAttribute('position', `0 ${y} 0.05`);
+      line.setAttribute('color', color);
+      line.setAttribute('width', textWidth.toString());
+      line.setAttribute('wrap-count', isNarrow ? '34' : '48');
+      scoreboard.appendChild(line);
+    };
+
+    makeScoreLine('scoreboard-rally', isNarrow ? 'RALLY 0  •  PLAYED 0' : 'RALLY SHOTS: 0   •   RALLIES PLAYED: 0', -0.05, '#6ee7b7', isNarrow ? 1.82 : 3.55);
+    makeScoreLine('scoreboard-accuracy', isNarrow ? 'CENTER 0  •  BEST 0' : 'CENTER HITS: 0   •   BEST RALLY: 0', -0.28, '#fbbf24', isNarrow ? 1.82 : 3.50);
+    makeScoreLine('scoreboard-bot', 'BOT MEDIUM • RULES ON', -0.50, '#c4b5fd', isNarrow ? 1.76 : 3.40);
 
     courtGroup.appendChild(scoreboard);
 
@@ -480,13 +509,13 @@ AFRAME.registerComponent('handball-court', {
 
     const kioskBg = document.createElement('a-plane');
     kioskBg.setAttribute('width', '2.0');
-    kioskBg.setAttribute('height', '1.8');
+    kioskBg.setAttribute('height', '2.05');
     kioskBg.setAttribute('material', 'color: #0b1120; shader: flat; opacity: 0.96; side: double');
     kioskGroup.appendChild(kioskBg);
 
     const kioskBorder = document.createElement('a-plane');
     kioskBorder.setAttribute('width', '2.04');
-    kioskBorder.setAttribute('height', '1.84');
+    kioskBorder.setAttribute('height', '2.09');
     kioskBorder.setAttribute('position', '0 0 -0.005');
     kioskBorder.setAttribute('material', 'color: #0284c7; shader: flat; side: double');
     kioskGroup.appendChild(kioskBorder);
@@ -494,33 +523,46 @@ AFRAME.registerComponent('handball-court', {
     const kioskTitle = document.createElement('a-text');
     kioskTitle.setAttribute('value', 'STADIUM CONTROLS');
     kioskTitle.setAttribute('align', 'center');
-    kioskTitle.setAttribute('position', '0 0.78 0.02');
+    kioskTitle.setAttribute('position', '0 0.88 0.02');
     kioskTitle.setAttribute('color', '#38bdf8');
-    kioskTitle.setAttribute('width', '4.0');
+    kioskTitle.setAttribute('width', '1.76');
+    kioskTitle.setAttribute('wrap-count', '28');
     kioskGroup.appendChild(kioskTitle);
 
     const kioskScore = document.createElement('a-text');
     kioskScore.setAttribute('id', 'kiosk-score-text');
     kioskScore.setAttribute('value', 'PLAYER: 0   |   OPPONENT: 0');
     kioskScore.setAttribute('align', 'center');
-    kioskScore.setAttribute('position', '0 0.60 0.02');
+    kioskScore.setAttribute('position', '0 0.69 0.02');
     kioskScore.setAttribute('color', '#f8fafc');
-    kioskScore.setAttribute('width', '4.5');
+    kioskScore.setAttribute('width', '1.80');
+    kioskScore.setAttribute('wrap-count', '34');
     kioskGroup.appendChild(kioskScore);
 
     const kioskInfo = document.createElement('a-text');
     kioskInfo.setAttribute('id', 'kiosk-info-text');
-    kioskInfo.setAttribute('value', 'SPEED: 0.0 MPH   •   RALLY: 0');
+    kioskInfo.setAttribute('value', 'SPEED: 0.0 MPH');
     kioskInfo.setAttribute('align', 'center');
-    kioskInfo.setAttribute('position', '0 0.46 0.02');
+    kioskInfo.setAttribute('position', '0 0.53 0.02');
     kioskInfo.setAttribute('color', '#fbbf24');
-    kioskInfo.setAttribute('width', '3.8');
+    kioskInfo.setAttribute('width', '1.72');
+    kioskInfo.setAttribute('wrap-count', '28');
     kioskGroup.appendChild(kioskInfo);
+
+    const kioskStats = document.createElement('a-text');
+    kioskStats.setAttribute('id', 'kiosk-stats-text');
+    kioskStats.setAttribute('value', 'RALLY: 0  •  CENTER: 0  •  BOT');
+    kioskStats.setAttribute('align', 'center');
+    kioskStats.setAttribute('position', '0 0.40 0.02');
+    kioskStats.setAttribute('color', '#6ee7b7');
+    kioskStats.setAttribute('width', '1.76');
+    kioskStats.setAttribute('wrap-count', '36');
+    kioskGroup.appendChild(kioskStats);
 
     const divider = document.createElement('a-plane');
     divider.setAttribute('width', '1.9');
     divider.setAttribute('height', '0.01');
-    divider.setAttribute('position', '0 0.36 0.02');
+    divider.setAttribute('position', '0 0.31 0.02');
     divider.setAttribute('material', 'color: #334155; shader: flat');
     kioskGroup.appendChild(divider);
 
@@ -539,23 +581,85 @@ AFRAME.registerComponent('handball-court', {
     kioskGroup.appendChild(makeBtn('⏸ PAUSE', 'pause', '#d97706', '#fbbf24', 0.88, 0.20, -0.48, -0.06));
     kioskGroup.appendChild(makeBtn('🔄 RESET', 'reset', '#dc2626', '#f87171', 0.88, 0.20, 0.48, -0.06));
 
-    // Row 3: Audio & Practice Bot
+    // Row 3: Audio and bot difficulty.
     kioskGroup.appendChild(makeBtn('🔊 AUDIO ON', 'audio', '#0891b2', '#22d3ee', 0.88, 0.18, -0.48, -0.28));
-    kioskGroup.appendChild(makeBtn('🤖 PRACTICE BOT', 'bot', '#7c3aed', '#a855f7', 0.88, 0.18, 0.48, -0.28));
+    kioskGroup.appendChild(makeBtn('BOT: MEDIUM', 'difficulty', '#6d28d9', '#a78bfa', 0.88, 0.18, 0.48, -0.28));
 
     // Row 4: Mode & Passthrough
     kioskGroup.appendChild(makeBtn(isNarrow ? '📏 MODE: NARROW' : '🏛 MODE: REGULATION', 'mode', '#4f46e5', '#818cf8', 0.88, 0.18, -0.48, -0.50));
     kioskGroup.appendChild(makeBtn(isPassthrough ? '🥽 PASSTHROUGH: ON' : '🥽 PASSTHROUGH: OFF', 'passthrough', '#a21caf', '#e879f9', 0.88, 0.18, 0.48, -0.50));
 
+    // Row 5: Freeplay spans the kiosk and is mutually exclusive with the bot.
+    kioskGroup.appendChild(makeBtn('∞ FREEPLAY: OFF', 'freeplay', '#047857', '#34d399', 1.84, 0.18, 0, -0.72));
+
     const tip = document.createElement('a-text');
     tip.setAttribute('value', 'Point laser / pinch or touch buttons');
     tip.setAttribute('align', 'center');
-    tip.setAttribute('position', '0 -0.74 0.02');
+    tip.setAttribute('position', '0 -0.92 0.02');
     tip.setAttribute('color', '#94a3b8');
     tip.setAttribute('width', '3.0');
     kioskGroup.appendChild(tip);
 
     courtGroup.appendChild(kioskGroup);
+
+    // Matching right-wall panel: visible whenever the left-wall kiosk is open.
+    const rulesPanel = document.createElement('a-entity');
+    rulesPanel.setAttribute('id', 'bot-rules-panel');
+    rulesPanel.setAttribute('position', `${halfW - 0.02} 1.55 6.0`);
+    rulesPanel.setAttribute('rotation', '0 -90 0');
+    rulesPanel.setAttribute('scale', isNarrow ? '0.68 0.68 0.68' : '0.85 0.85 0.85');
+    rulesPanel.setAttribute('visible', this.data.kioskVisible.toString());
+
+    const rulesBg = document.createElement('a-plane');
+    rulesBg.setAttribute('width', '2.0');
+    rulesBg.setAttribute('height', '2.25');
+    rulesBg.setAttribute('material', 'color: #0b1120; shader: flat; opacity: 0.96; side: double');
+    rulesPanel.appendChild(rulesBg);
+
+    const rulesBorder = document.createElement('a-plane');
+    rulesBorder.setAttribute('width', '2.04');
+    rulesBorder.setAttribute('height', '2.29');
+    rulesBorder.setAttribute('position', '0 0 -0.005');
+    rulesBorder.setAttribute('material', 'color: #7c3aed; shader: flat; side: double');
+    rulesPanel.appendChild(rulesBorder);
+
+    const rulesTitle = document.createElement('a-text');
+    rulesTitle.setAttribute('value', 'BOT PLAY // RALLY RULES');
+    rulesTitle.setAttribute('align', 'center');
+    rulesTitle.setAttribute('position', '0 0.92 0.02');
+    rulesTitle.setAttribute('color', '#c4b5fd');
+    rulesTitle.setAttribute('width', '3.7');
+    rulesPanel.appendChild(rulesTitle);
+
+    const rulesBody = document.createElement('a-text');
+    rulesBody.setAttribute('value', [
+      'EVERY RALLY SCORES 1 POINT',
+      '',
+      '1  Reach the front wall before the floor.',
+      '2  Return the ball before its second bounce.',
+      '3  A missed return scores for the last hitter.',
+      '4  First to 21 wins by 2.',
+      '',
+      'CENTER TARGET',
+      'Ring hits count accuracy, not bonus points.',
+      '',
+      'BEAT THE BOT',
+      'It reacts and moves with limited reach.',
+      'Use low, fast, or wide placement.',
+      'Difficulty sets its error rate; Perfect never misses.',
+      '',
+      'FREEPLAY turns bot and scoring rules off.',
+    ].join('\n'));
+    rulesBody.setAttribute('align', 'left');
+    rulesBody.setAttribute('anchor', 'center');
+    rulesBody.setAttribute('position', '0 0.67 0.02');
+    rulesBody.setAttribute('baseline', 'top');
+    rulesBody.setAttribute('color', '#e2e8f0');
+    rulesBody.setAttribute('width', '1.72');
+    rulesBody.setAttribute('wrap-count', '38');
+    rulesPanel.appendChild(rulesBody);
+
+    courtGroup.appendChild(rulesPanel);
 
     // This compact control is intentionally outside the kiosk hierarchy so it
     // remains available to restore the kiosk after its interactive subtree is hidden.

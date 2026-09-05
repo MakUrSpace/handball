@@ -28,13 +28,14 @@ function distanceToSegment(
 
 AFRAME.registerComponent('hand-striker', {
   schema: {
-    minStrikeSpeed: { type: 'number', default: 0.15 }, // Min hand speed (m/s) to register active swing
-    powerMultiplier: { type: 'number', default: 3.8 },
-    maxBallSpeed: { type: 'number', default: 26.0 }, // Cap at ~58 mph for crisp high-speed play
+    minStrikeSpeed: { type: 'number', default: 0.4 }, // Threshold where a contact becomes an active swing
+    contactElasticity: { type: 'number', default: 1.12 }, // Slight energy return keeps passive blocks lively
+    powerMultiplier: { type: 'number', default: 0.16 }, // Speed multiplier added per m/s of effective swing
+    maxBallSpeed: { type: 'number', default: 27.0 }, // Cap at ~60 mph to keep hard swings playable
     debounceMs: { type: 'number', default: 110 }, // Cooldown to prevent double strikes
     strikeRadius: { type: 'number', default: 0.36 }, // 36cm generous strike volume around hand
     strikeThickness: { type: 'number', default: 0.055 },
-    spinMultiplier: { type: 'number', default: 1.15 },
+    spinMultiplier: { type: 'number', default: 0.9 },
     spinFollowThroughMs: { type: 'number', default: 180 },
   },
 
@@ -45,6 +46,7 @@ AFRAME.registerComponent('hand-striker', {
     this.gameManagerEl = document.querySelector('#game-scene');
     this.lastStrikeTime = 0;
     this.spinFollowThrough = null;
+    this.previousBallPosition = null;
 
     // Desktop fallback strike trigger (Click or Spacebar)
     window.addEventListener('keydown', (e: KeyboardEvent) => {
@@ -71,19 +73,24 @@ AFRAME.registerComponent('hand-striker', {
 
   tick: function () {
     const ballPhysics = this.el.components['handball-physics'];
-    if (!ballPhysics || !ballPhysics.data.active || ballPhysics.data.isHeld) return;
+    if (!ballPhysics || !ballPhysics.data.active || ballPhysics.data.isHeld) {
+      this.previousBallPosition = null;
+      return;
+    }
+
+    const ballPos = this.el.object3D.position;
+    const ballRadius = ballPhysics.data.radius;
+    const previousBallPos = this.previousBallPosition?.clone?.() || ballPos.clone();
+    this.previousBallPosition = ballPos.clone();
 
     const now = performance.now();
     this.updateSpinFollowThrough(now, ballPhysics);
     if (now - this.lastStrikeTime < this.data.debounceMs) return;
 
-    const ballPos = this.el.object3D.position;
-    const ballRadius = ballPhysics.data.radius;
-
     // 1. Check Right Hand
     if (this.rightHandEl && this.rightHandEl.components['hand-tracker']) {
       const data = this.rightHandEl.components['hand-tracker'].getVelocityData();
-      if (this.checkHandHit(data, ballPos, ballRadius, ballPhysics, 'right', this.rightHandEl)) {
+      if (this.checkHandHit(data, ballPos, previousBallPos, ballRadius, ballPhysics, 'right', this.rightHandEl)) {
         this.lastStrikeTime = now;
         return;
       }
@@ -92,7 +99,7 @@ AFRAME.registerComponent('hand-striker', {
     // 2. Check Left Hand
     if (this.leftHandEl && this.leftHandEl.components['hand-tracker']) {
       const data = this.leftHandEl.components['hand-tracker'].getVelocityData();
-      if (this.checkHandHit(data, ballPos, ballRadius, ballPhysics, 'left', this.leftHandEl)) {
+      if (this.checkHandHit(data, ballPos, previousBallPos, ballRadius, ballPhysics, 'left', this.leftHandEl)) {
         this.lastStrikeTime = now;
         return;
       }
@@ -102,6 +109,7 @@ AFRAME.registerComponent('hand-striker', {
   checkHandHit: function (
     handData: any,
     ballPos: THREE.Vector3,
+    previousBallPos: THREE.Vector3,
     ballRadius: number,
     ballPhysics: any,
     side: string,
@@ -124,9 +132,31 @@ AFRAME.registerComponent('hand-striker', {
       return Math.abs(planeDistance) <= hitThickness && radialDistance <= hitRadius;
     };
 
+    const sweptBallIntersectsDisc = (palmCenter: any) => {
+      if (!previousBallPos || previousBallPos.distanceTo(ballPos) > 1.5) return false;
+      const previousOffset = new THREE.Vector3().subVectors(previousBallPos, palmCenter);
+      const currentOffset = new THREE.Vector3().subVectors(ballPos, palmCenter);
+      const previousPlaneDistance = previousOffset.dot(palmNormal);
+      const currentPlaneDistance = currentOffset.dot(palmNormal);
+      if (previousPlaneDistance * currentPlaneDistance > 0
+        && Math.min(Math.abs(previousPlaneDistance), Math.abs(currentPlaneDistance)) > hitThickness) {
+        return false;
+      }
+      const denominator = previousPlaneDistance - currentPlaneDistance;
+      const t = Math.max(0, Math.min(1, Math.abs(denominator) > 1e-6
+        ? previousPlaneDistance / denominator
+        : 0));
+      const crossingPoint = new THREE.Vector3().lerpVectors(previousBallPos, ballPos, t);
+      const radialOffset = new THREE.Vector3().subVectors(crossingPoint, palmCenter);
+      radialOffset.addScaledVector(palmNormal, -radialOffset.dot(palmNormal));
+      return radialOffset.length() <= hitRadius;
+    };
+
     // The visible pitched disk is now the actual collision surface. Test its
     // current pose and a swept palm-center segment to retain high-speed hits.
     if (intersectsPitchedDisc(handData.position)) {
+      hitDetected = true;
+    } else if (sweptBallIntersectsDisc(handData.position)) {
       hitDetected = true;
     } else if (handData.previousPosition && !handData.isRecovering) {
       const sweptPalm = distanceToSegment(ballPos, handData.previousPosition, handData.position);
@@ -145,11 +175,24 @@ AFRAME.registerComponent('hand-striker', {
       normal.negate();
     }
 
-    // Compute strike impulse trajectory:
-    // Blend hand velocity direction with palm/contact normal
+    const closingSpeed = Math.max(0, handVel.dot(normal));
+    const hasActiveSwing = handSpeed >= this.data.minStrikeSpeed;
+    const swingSpeed = hasActiveSwing ? Math.max(closingSpeed, handSpeed * 0.5) : 0;
+    const swingMultiplier = 1 + Math.min(swingSpeed * this.data.powerMultiplier, 0.65);
+    const incomingSpeed = ballPhysics.velocity.length();
+
+    // Contact with a motionless ball only becomes a strike when the player
+    // supplies an actual swing. A held disc remains inert until the ball arrives.
+    if (incomingSpeed < 0.25 && !hasActiveSwing) return false;
+
+    // Passive contact follows the disc normal. As the arm accelerates, the
+    // actual swing direction rapidly takes over both aim and power.
     let strikeDir = new THREE.Vector3();
-    if (handSpeed > 0.2) {
-      strikeDir.copy(handVel).normalize().multiplyScalar(0.55).addScaledVector(normal, 0.45).normalize();
+    if (hasActiveSwing && handSpeed > 0.01) {
+      const swingInfluence = Math.min(0.55, swingSpeed * 0.14);
+      strikeDir.copy(normal).multiplyScalar(1 - swingInfluence)
+        .addScaledVector(handVel.clone().normalize(), swingInfluence)
+        .normalize();
     } else {
       strikeDir.copy(normal);
     }
@@ -164,27 +207,33 @@ AFRAME.registerComponent('hand-striker', {
     }
     strikeDir.normalize();
 
-    // High Power Scaling for VR Bare Hands:
-    // Any clean forward hand motion produces a crisp, energetic shot.
-    const incomingSpeed = Math.min(ballPhysics.velocity.length(), 22.0);
-    const baseHandPower = Math.max(handSpeed * this.data.powerMultiplier, 11.0); // Min 11 m/s (~25 mph)
-    const reboundElasticity = incomingSpeed * 0.52; // High rubber handball elasticity rebound
-    const baseSpeed = baseHandPower + reboundElasticity;
-    const finalSpeed = Math.min(Math.max(baseSpeed, 11.5), this.data.maxBallSpeed); // 25.7 mph to 58.2 mph
+    // Passive contact is slightly super-elastic so a block feels springy after
+    // court and air losses. An actual swing applies an additional bounded gain.
+    // A separate baseline lets a physical swing launch a nearly stationary serve.
+    const elasticSpeed = incomingSpeed >= 0.25 ? incomingSpeed : 8.0;
+    const finalSpeed = Math.min(
+      elasticSpeed * this.data.contactElasticity * swingMultiplier,
+      this.data.maxBallSpeed
+    );
 
     const newVelocity = strikeDir.multiplyScalar(finalSpeed);
-    const angularHandMotion = (handData.angularVelocity || new THREE.Vector3())
-      .clone()
-      .multiplyScalar(this.data.spinMultiplier);
-    const tangentialSpin = handVel.clone().cross(normal).multiplyScalar(0.7);
-    const initialSpin = angularHandMotion.add(tangentialSpin);
-    if (initialSpin.length() > 34) initialSpin.setLength(34);
+    const spinInfluence = Math.min(swingSpeed / 3.5, 1);
+    let initialSpin = ballPhysics.angularVelocity.clone();
+    if (hasActiveSwing) {
+      const angularHandMotion = (handData.angularVelocity || new THREE.Vector3())
+        .clone()
+        .multiplyScalar(this.data.spinMultiplier * spinInfluence);
+      const tangentialSpin = handVel.clone().cross(normal).multiplyScalar(0.45 * spinInfluence);
+      initialSpin = angularHandMotion.add(tangentialSpin);
+      if (initialSpin.length() > 20) initialSpin.setLength(20);
+    }
     ballPhysics.applyImpulse(newVelocity, initialSpin);
-    this.spinFollowThrough = {
+    this.spinFollowThrough = hasActiveSwing ? {
       handEl,
       normal: normal.clone(),
+      spinInfluence,
       expiresAt: performance.now() + this.data.spinFollowThroughMs,
-    };
+    } : null;
 
     const speedMph = finalSpeed * 2.23694;
     let quality = 'Solid';
@@ -212,6 +261,8 @@ AFRAME.registerComponent('hand-striker', {
       speedMps: finalSpeed,
       speedMph,
       quality,
+      handSpeed,
+      swingMultiplier,
       position: { x: ballPos.x, y: ballPos.y, z: ballPos.z },
     });
 
@@ -239,12 +290,16 @@ AFRAME.registerComponent('hand-striker', {
     const handData = tracker.getVelocityData();
     if (!handData.isTracked || handData.isRecovering) return;
 
-    const desiredSpin = handData.angularVelocity.clone().multiplyScalar(this.data.spinMultiplier);
-    desiredSpin.add(handData.velocity.clone().cross(followThrough.normal).multiplyScalar(0.45));
-    if (desiredSpin.length() > 34) desiredSpin.setLength(34);
+    const desiredSpin = handData.angularVelocity.clone()
+      .multiplyScalar(this.data.spinMultiplier * followThrough.spinInfluence);
+    desiredSpin.add(
+      handData.velocity.clone().cross(followThrough.normal)
+        .multiplyScalar(0.35 * followThrough.spinInfluence)
+    );
+    if (desiredSpin.length() > 20) desiredSpin.setLength(20);
 
     const remaining = (followThrough.expiresAt - now) / this.data.spinFollowThroughMs;
-    ballPhysics.blendSpin(desiredSpin, 0.12 + remaining * 0.18);
+    ballPhysics.blendSpin(desiredSpin, 0.08 + remaining * 0.12);
   },
 
   triggerDesktopStrike: function () {

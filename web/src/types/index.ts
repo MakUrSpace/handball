@@ -27,6 +27,8 @@ export interface MatchStats {
   max_ball_speed_mph: number;
   total_aces: number;
   kill_shots: number;
+  center_wall_hits: number;
+  opponent_center_wall_hits: number;
 }
 
 export interface MatchSettings {
@@ -34,6 +36,8 @@ export interface MatchSettings {
   win_by_two: boolean;
   auto_serve: boolean;
   rally_scoring: boolean;
+  freeplay: boolean;
+  bot_error_rate: number;
 }
 
 export interface MatchSnapshot {
@@ -48,6 +52,11 @@ export interface MatchSnapshot {
   ball_speed_mph: number;
   floor_bounces_since_hit: number;
   front_wall_hit_this_turn: boolean;
+  last_hitter?: PlayerRole;
+  bot_enabled?: boolean;
+  freeplay_enabled?: boolean;
+  bot_difficulty?: string;
+  bot_error_rate?: number;
   stats: MatchStats;
   settings: MatchSettings;
 }

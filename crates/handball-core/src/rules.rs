@@ -23,10 +23,12 @@ pub enum MatchState {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MatchSettings {
-    pub target_score: u32,       // e.g. 21 (or 15, 11)
+    pub target_score: u32, // e.g. 21 (or 15, 11)
     pub win_by_two: bool,
     pub auto_serve: bool,
-    pub rally_scoring: bool,     // True = point on every rally; False = traditional USHA side-out scoring
+    pub rally_scoring: bool, // True = point on every rally; False = traditional USHA side-out scoring
+    #[serde(default)]
+    pub freeplay: bool, // Track shots/accuracy without faults, points, or rally termination
 }
 
 impl Default for MatchSettings {
@@ -36,6 +38,7 @@ impl Default for MatchSettings {
             win_by_two: true,
             auto_serve: false,
             rally_scoring: true, // Modern rally scoring default for fun continuous play
+            freeplay: false,
         }
     }
 }
@@ -48,6 +51,8 @@ pub struct MatchStats {
     pub max_ball_speed_mph: f32,
     pub total_aces: u32,
     pub kill_shots: u32,
+    pub center_wall_hits: u32,
+    pub opponent_center_wall_hits: u32,
 }
 
 impl Default for MatchStats {
@@ -59,6 +64,8 @@ impl Default for MatchStats {
             max_ball_speed_mph: 0.0,
             total_aces: 0,
             kill_shots: 0,
+            center_wall_hits: 0,
+            opponent_center_wall_hits: 0,
         }
     }
 }
@@ -153,6 +160,11 @@ impl HandballGameRules {
         self.floor_bounces_since_hit = 0;
         self.front_wall_hit_this_turn = false;
         self.stats.current_rally_shots += 1;
+        if self.settings.freeplay
+            && self.stats.current_rally_shots > self.stats.longest_rally
+        {
+            self.stats.longest_rally = self.stats.current_rally_shots;
+        }
 
         if strike.strike_speed_mph > self.stats.max_ball_speed_mph {
             self.stats.max_ball_speed_mph = strike.strike_speed_mph;
@@ -179,20 +191,46 @@ impl HandballGameRules {
         for event in events {
             match event.surface {
                 WallSurface::FrontWall => {
-                    self.front_wall_hit_this_turn = true;
+                    if !self.front_wall_hit_this_turn {
+                        self.front_wall_hit_this_turn = true;
+                        let target_radius = if self.court.width <= 2.5 { 0.42 } else { 0.67 };
+                        let dx = event.point.x;
+                        let dy = event.point.y - 1.2;
+                        if (dx * dx + dy * dy).sqrt() <= target_radius {
+                            match self.last_hitter {
+                                Some(PlayerRole::Receiver) => {
+                                    self.stats.opponent_center_wall_hits += 1;
+                                }
+                                Some(PlayerRole::Server) => {
+                                    self.stats.center_wall_hits += 1;
+                                }
+                                None => {}
+                            }
+                        }
+                    }
                 }
                 WallSurface::Floor => {
                     self.floor_bounces_since_hit += 1;
 
-                    // If serving and ball bounces before front wall -> fault
-                    if self.state == MatchState::Serving && !self.front_wall_hit_this_turn {
-                        self.handle_fault("Service Fault: Ball hit floor before front wall!");
+                    if self.settings.freeplay {
+                        continue;
+                    }
+
+                    // Every shot must reach the front wall before touching the floor.
+                    if !self.front_wall_hit_this_turn {
+                        if self.last_hitter.is_none() {
+                            self.handle_fault("Service Fault: Ball hit floor before front wall!");
+                        } else {
+                            let player_won = self.last_hitter == Some(PlayerRole::Receiver);
+                            self.handle_rally_end(player_won, "Floor before front wall");
+                        }
                         return;
                     }
 
                     // If in rally and ball bounces twice without return strike -> rally ends
                     if self.floor_bounces_since_hit >= 2 {
-                        self.handle_rally_end(true, "Double bounce! Point won.");
+                        let player_won = self.last_hitter != Some(PlayerRole::Receiver);
+                        self.handle_rally_end(player_won, "Double bounce");
                         return;
                     }
                 }
@@ -207,8 +245,13 @@ impl HandballGameRules {
 
         // Check if ball went out of bounds or died
         let speed = ball.velocity.length();
-        if self.state == MatchState::InPlay && self.floor_bounces_since_hit >= 1 && speed < 0.5 {
-            self.handle_rally_end(true, "Ball dead! Point awarded.");
+        if !self.settings.freeplay
+            && self.state == MatchState::InPlay
+            && self.floor_bounces_since_hit >= 1
+            && speed < 0.5
+        {
+            let player_won = self.last_hitter != Some(PlayerRole::Receiver);
+            self.handle_rally_end(player_won, "Dead ball after one bounce");
         }
     }
 
@@ -235,10 +278,12 @@ impl HandballGameRules {
 
         if player_won {
             self.player_score += 1;
+            self.current_server = PlayerRole::Server;
             self.state = MatchState::PointScored;
             self.message = format!("Point to Player! ({})", reason);
         } else {
             self.opponent_score += 1;
+            self.current_server = PlayerRole::Receiver;
             self.state = MatchState::PointScored;
             self.message = format!("Point to Opponent! ({})", reason);
         }
@@ -302,7 +347,10 @@ mod tests {
         rules.start_game();
         assert_eq!(rules.state, MatchState::Serving);
 
-        let ball = Ball::default();
+        let ball = Ball {
+            velocity: Vec3::new(0.0, 0.0, 3.0),
+            ..Ball::default()
+        };
         let strike = StrikeResult {
             hit: true,
             quality: crate::strike::HitQuality::Solid,

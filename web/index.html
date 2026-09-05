@@ -105,6 +105,14 @@
         🔄 RESET
       </button>
 
+      <button id="btn-freeplay" class="game-ui-btn bg-emerald-950/80 text-emerald-300 border-emerald-500/40" title="Disable scoring, faults, and rally termination while retaining stats">
+        ∞ FREEPLAY: OFF
+      </button>
+
+      <button id="btn-bot-difficulty" class="game-ui-btn bg-violet-950/80 text-violet-300 border-violet-500/40" title="Cycle bot difficulty and return error rate">
+        🤖 BOT: MEDIUM
+      </button>
+
       <button id="btn-mode" class="game-ui-btn bg-indigo-950/80 text-indigo-300 border-indigo-500/40" title="Toggle Narrow / Regulation Court">
         📏 MODE: NARROW
       </button>
@@ -139,6 +147,14 @@
     </div>
     <div class="flex items-center gap-4 text-xs font-mono text-slate-400">
       <span>TOP SPEED: <strong id="hud-max-speed" class="text-sky-300">0.0 MPH</strong></span>
+      <span>•</span>
+      <span>CENTER HITS: <strong id="hud-center-hits" class="text-violet-300">0</strong></span>
+      <span>•</span>
+      <span>RALLIES: <strong id="hud-total-rallies" class="text-emerald-300">0</strong></span>
+      <span>•</span>
+      <span>BOT: <strong id="hud-bot-state" class="text-violet-300">ACTIVE</strong></span>
+      <span>•</span>
+      <span>FREEPLAY: <strong id="hud-freeplay-state" class="text-slate-300">OFF</strong></span>
       <span>•</span>
       <span>SHORT LINE: <strong>20 FT</strong></span>
       <span>•</span>
@@ -235,8 +251,11 @@
       id="handball"
       position="0.2 1.25 6.2"
       handball-physics="radius: 0.025; mass: 0.065"
-      hand-striker="minStrikeSpeed: 0.4; powerMultiplier: 1.65; strikeRadius: 0.22"
+      hand-striker="minStrikeSpeed: 0.4; contactElasticity: 1.12; powerMultiplier: 0.16; maxBallSpeed: 27; spinMultiplier: 0.9; strikeRadius: 0.22"
     ></a-entity>
+
+    <!-- Visible, moving opponent used by Practice Bot mode -->
+    <a-entity id="practice-bot" practice-bot="enabled: true" visible="true"></a-entity>
 
   </a-scene>
 

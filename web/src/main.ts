@@ -9,6 +9,7 @@ import './components/court';
 import './components/ball-physics';
 import './components/hand-tracker';
 import './components/hand-striker';
+import './components/practice-bot';
 import './components/game-manager';
 import './components/hud';
 import './components/websocket-sync';
