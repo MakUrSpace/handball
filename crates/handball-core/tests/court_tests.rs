@@ -2,7 +2,7 @@ use handball_core::{Ball, CourtDimensions, PhysicsConfig, PhysicsEngine, Vec3, W
 
 #[test]
 fn test_court_dimensions_and_legal_zones() {
-    let court = CourtDimensions::default();
+    let court = CourtDimensions::regulation();
 
     assert_eq!(court.length, 12.192);
     assert_eq!(court.width, 6.096);
@@ -19,8 +19,18 @@ fn test_court_dimensions_and_legal_zones() {
 }
 
 #[test]
-fn test_front_wall_restitution_and_trajectory() {
+fn test_default_court_uses_narrow_training_mode() {
     let court = CourtDimensions::default();
+
+    assert_eq!(court.width, 2.2);
+    assert_eq!(court.service_box_width, 0.25);
+    assert!(court.is_inside(0.0, 1.5, 5.0, 0.025));
+    assert!(!court.is_inside(2.8, 1.5, 5.0, 0.025));
+}
+
+#[test]
+fn test_front_wall_restitution_and_trajectory() {
+    let court = CourtDimensions::regulation();
     let config = PhysicsConfig::default();
     let engine = PhysicsEngine::new(court, config);
 
@@ -41,7 +51,7 @@ fn test_front_wall_restitution_and_trajectory() {
 
 #[test]
 fn test_sidewall_carom_and_floor_reflection() {
-    let court = CourtDimensions::default();
+    let court = CourtDimensions::regulation();
     let config = PhysicsConfig::default();
     let engine = PhysicsEngine::new(court, config);
 

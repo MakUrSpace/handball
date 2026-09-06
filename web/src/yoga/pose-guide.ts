@@ -36,40 +36,40 @@ const POSES: PosePreset[] = [
     cue: 'Soften the knees and open both arms wide.',
     headDrop: 0.04,
     turnDegrees: 0,
-    left: [-0.48, -0.02, 0.08],
-    right: [0.48, -0.02, 0.08],
+    left: [-0.43, -0.02, 0.28],
+    right: [0.43, -0.02, 0.28],
   },
   {
     name: 'Crouching Comet',
     cue: 'Lower gently. Reach right out and float the left hand up.',
     headDrop: 0.3,
     turnDegrees: 18,
-    left: [-0.08, 0.56, 0.04],
-    right: [0.53, -0.06, 0.05],
+    left: [-0.08, 0.53, 0.18],
+    right: [0.49, -0.06, 0.26],
   },
   {
     name: 'Spiral Reach',
     cue: 'Rise through center and rotate the ribs to the left.',
     headDrop: 0.1,
     turnDegrees: -34,
-    left: [-0.38, 0.24, 0.2],
-    right: [0.28, -0.18, -0.22],
+    left: [-0.38, 0.24, 0.26],
+    right: [0.28, -0.18, 0.18],
   },
   {
     name: 'Solar Arc',
     cue: 'Lengthen upward, keeping both shoulders easy.',
     headDrop: 0,
     turnDegrees: 12,
-    left: [-0.31, 0.47, 0.06],
-    right: [0.42, 0.24, 0.14],
+    left: [-0.31, 0.45, 0.22],
+    right: [0.4, 0.24, 0.25],
   },
   {
     name: 'Low Orbit',
     cue: 'Sink back, turn right, and sweep both hands across the horizon.',
     headDrop: 0.24,
     turnDegrees: 31,
-    left: [-0.4, -0.14, 0.18],
-    right: [0.42, 0.05, -0.12],
+    left: [-0.4, -0.14, 0.24],
+    right: [0.42, 0.05, 0.16],
   },
 ];
 
@@ -185,7 +185,7 @@ AFRAME.registerComponent('yoga-pose-guide', {
       blending: THREE.AdditiveBlending,
     });
     this.headMarker = new THREE.Mesh(
-      new THREE.TorusGeometry(0.13, 0.006, 8, 40),
+      new THREE.TorusGeometry(0.055, 0.004, 8, 32),
       this.headMarkerMaterial,
     );
     this.el.object3D.add(this.headMarker);
@@ -236,8 +236,14 @@ AFRAME.registerComponent('yoga-pose-guide', {
   getBodyFrame: function () {
     const head = new THREE.Vector3(0, this.baselineHeadHeight || 1.65, 0);
     const forward = new THREE.Vector3(0, 0, -1);
-    this.cameraEl?.object3D?.getWorldPosition(head);
-    this.cameraEl?.object3D?.getWorldDirection(forward);
+    // An A-Frame camera entity is a generic Object3D wrapper (+Z forward)
+    // around a Three.js Camera (-Z view direction). Pose planning must use the
+    // actual camera or every guide is generated behind the user's head.
+    const camera = this.cameraEl?.getObject3D?.('camera')
+      || this.cameraEl?.components?.camera?.camera
+      || this.cameraEl?.object3D;
+    camera?.getWorldPosition(head);
+    camera?.getWorldDirection(forward);
     forward.y = 0;
     if (forward.lengthSq() < 0.0001) forward.set(0, 0, -1);
     forward.normalize();
@@ -255,8 +261,8 @@ AFRAME.registerComponent('yoga-pose-guide', {
 
   getFallbackHand: function (side: 'left' | 'right', frame: any) {
     return frame.head.clone()
-      .addScaledVector(frame.right, side === 'left' ? -0.34 : 0.34)
-      .addScaledVector(frame.forward, 0.22)
+      .addScaledVector(frame.right, side === 'left' ? -0.16 : 0.16)
+      .addScaledVector(frame.forward, 0.55)
       .add(new THREE.Vector3(0, -0.48, 0));
   },
 
@@ -280,7 +286,7 @@ AFRAME.registerComponent('yoga-pose-guide', {
       const target = shoulder.clone()
         .addScaledVector(plannedRight, offset[0] * reachScale)
         .add(new THREE.Vector3(0, offset[1] * reachScale, 0))
-        .addScaledVector(plannedForward, offset[2] * (0.35 + complexity * 0.65));
+        .addScaledVector(plannedForward, 0.2 + offset[2] * (0.5 + complexity * 0.5));
       return this.constrainTarget(target, shoulder);
     };
 
@@ -330,7 +336,7 @@ AFRAME.registerComponent('yoga-pose-guide', {
       this.makeCurve(rightStart, rightTarget, plannedRight, 1, complexity),
       0.009 + intensity * 0.009,
     );
-    this.headMarker.position.copy(targetHead).addScaledVector(frame.forward, 0.32);
+    this.headMarker.position.copy(targetHead).addScaledVector(frame.forward, 0.85);
     this.updateUi(0, hands);
     this.el.emit('yoga-pose-change', { index: this.poseIndex, plan: this.plan });
   },

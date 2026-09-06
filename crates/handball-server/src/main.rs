@@ -250,7 +250,7 @@ async fn handball_ws_handler(
 }
 
 fn handball_socket_upgrade(ws: WebSocketUpgrade, state: Arc<AppState>) -> impl IntoResponse {
-    ws.on_upgrade(|socket| handle_socket(socket, state.handball.clone()))
+    ws.on_upgrade(move |socket| handle_socket(socket, state.handball.clone()))
 }
 
 async fn handle_socket(socket: WebSocket, state: Arc<HandballAppState>) {
