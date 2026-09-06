@@ -50,6 +50,7 @@
               ./web/tsconfig.json
               ./web/vite.config.ts
               ./web/index.html
+              ./web/apps
               ./web/src
             ];
           };

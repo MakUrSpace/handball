@@ -1,9 +1,10 @@
 use axum::{
     extract::{
         ws::{Message, WebSocket, WebSocketUpgrade},
-        State,
+        Path, State,
     },
-    response::IntoResponse,
+    http::StatusCode,
+    response::{IntoResponse, Redirect},
     routing::{get, post},
     Json, Router,
 };
@@ -20,14 +21,16 @@ use tower_http::cors::CorsLayer;
 use tower_http::services::{ServeDir, ServeFile};
 use tracing::{error, info};
 
+mod apps;
 mod rpc;
 mod state;
 
+use apps::AppRegistry;
 use rpc::{execute_rpc, RpcRequest, RpcResponse};
-use state::{AppState, HandballEngineState};
+use state::{AppState, HandballAppState, HandballEngineState};
 
 #[derive(Parser, Debug)]
-#[command(author, version, about = "VR Handball Web & API Server")]
+#[command(author, version, about = "A-Frame App Hub Web & API Server")]
 struct Args {
     #[arg(short, long, default_value_t = 8080)]
     port: u16,
@@ -70,16 +73,20 @@ async fn main() {
     }
 
     info!("=======================================================");
-    info!("Starting VR Handball Engine Server on port {}", args.port);
+    info!("Starting A-Frame App Hub on port {}", args.port);
     info!("Serving Web UI static assets from {:?}", web_dir);
     info!("=======================================================");
 
     let engine = Arc::new(Mutex::new(HandballEngineState::new()));
     let (tx, _) = broadcast::channel::<String>(200);
 
-    let state = Arc::new(AppState {
+    let handball = Arc::new(HandballAppState {
         engine: engine.clone(),
         tx: tx.clone(),
+    });
+    let state = Arc::new(AppState {
+        apps: AppRegistry::built_in(),
+        handball,
     });
 
     // Background simulation loop for server-side physics verification / spectator broadcast
@@ -95,7 +102,7 @@ async fn main() {
         loop {
             interval.tick().await;
             let mut eng = engine_clone.lock().unwrap();
-            
+
             // Only simulate physics continuously when ball is in play or serving
             if eng.rules.state == handball_core::MatchState::InPlay {
                 let snap = eng.tick(dt);
@@ -114,16 +121,30 @@ async fn main() {
 
     let app = Router::new()
         .route("/api/health", get(health_check))
+        .route("/api/apps", get(get_apps))
+        .route("/api/apps/:app_id", get(get_app))
+        .route("/api/apps/handball/state", get(get_handball_state))
+        .route("/api/apps/handball/rpc", post(handle_handball_rpc))
+        .route("/ws/apps/handball", get(handball_ws_handler))
+        // Compatibility aliases for existing handball clients.
         .route("/api/state", get(get_state))
         .route("/api/rpc", post(handle_rpc_endpoint))
         .route("/ws", get(ws_handler))
+        .route(
+            "/handball",
+            get(|| async { Redirect::permanent("/apps/handball/") }),
+        )
+        .route(
+            "/yoga",
+            get(|| async { Redirect::permanent("/apps/yoga/") }),
+        )
         .fallback_service(ServeDir::new(&web_dir).fallback(ServeFile::new(index_html_path)))
         .layer(axum::middleware::map_response(no_cache_response))
         .layer(CorsLayer::permissive())
         .with_state(state);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], args.port));
-    info!("VR Handball Server listening at http://{}", addr);
+    info!("A-Frame App Hub listening at http://{}", addr);
 
     let listener = match tokio::net::TcpListener::bind(addr).await {
         Ok(l) => l,
@@ -155,23 +176,54 @@ async fn no_cache_response(mut response: axum::response::Response) -> axum::resp
     response
 }
 
-async fn health_check() -> Json<serde_json::Value> {
+async fn health_check(State(state): State<Arc<AppState>>) -> Json<serde_json::Value> {
     Json(json!({
         "status": "ok",
-        "service": "vr-handball-engine",
-        "version": "0.1.0"
+        "service": "aframe-app-hub",
+        "version": "0.2.0",
+        "apps": state.apps.all().iter().map(|app| app.id).collect::<Vec<_>>()
     }))
 }
 
-async fn get_state(State(state): State<Arc<AppState>>) -> Json<MatchSnapshot> {
-    let engine = state.engine.lock().unwrap();
+async fn get_apps(State(state): State<Arc<AppState>>) -> Json<serde_json::Value> {
+    Json(json!({ "apps": state.apps.all() }))
+}
+
+async fn get_app(
+    Path(app_id): Path<String>,
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    state
+        .apps
+        .find(&app_id)
+        .map(|app| Json(json!(app)))
+        .ok_or(StatusCode::NOT_FOUND)
+}
+
+async fn get_handball_state(State(state): State<Arc<AppState>>) -> Json<MatchSnapshot> {
+    let engine = state.handball.engine.lock().unwrap();
     Json(engine.snapshot())
+}
+
+async fn get_state(State(state): State<Arc<AppState>>) -> Json<MatchSnapshot> {
+    get_handball_state(State(state)).await
+}
+
+async fn handle_handball_rpc(
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<RpcRequest>,
+) -> Json<RpcResponse> {
+    rpc_response(state.handball.clone(), req).await
 }
 
 async fn handle_rpc_endpoint(
     State(state): State<Arc<AppState>>,
     Json(req): Json<RpcRequest>,
 ) -> Json<RpcResponse> {
+    rpc_response(state.handball.clone(), req).await
+}
+
+async fn rpc_response(state: Arc<HandballAppState>, req: RpcRequest) -> Json<RpcResponse> {
     match execute_rpc(state, req).await {
         Ok(res) => Json(RpcResponse {
             jsonrpc: "2.0".into(),
@@ -186,14 +238,22 @@ async fn handle_rpc_endpoint(
     }
 }
 
-async fn ws_handler(
+async fn ws_handler(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    handball_socket_upgrade(ws, state)
+}
+
+async fn handball_ws_handler(
     ws: WebSocketUpgrade,
     State(state): State<Arc<AppState>>,
 ) -> impl IntoResponse {
-    ws.on_upgrade(|socket| handle_socket(socket, state))
+    handball_socket_upgrade(ws, state)
 }
 
-async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
+fn handball_socket_upgrade(ws: WebSocketUpgrade, state: Arc<AppState>) -> impl IntoResponse {
+    ws.on_upgrade(|socket| handle_socket(socket, state.handball.clone()))
+}
+
+async fn handle_socket(socket: WebSocket, state: Arc<HandballAppState>) {
     info!("New WebXR client connected to game stream");
     let (mut sender, mut receiver) = socket.split();
     let mut rx = state.tx.subscribe();

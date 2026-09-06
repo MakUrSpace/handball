@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#020208" />
+  <title>Yoga // A-Frame App Hub</title>
+  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+</head>
+<body>
+  <header class="yoga-bar">
+    <a class="back-link" href="/">← ALL SPACES</a>
+    <div class="brand">
+      <span class="brand-mark">◌</span>
+      <div>
+        <strong>YOGA // CONSTELLATION FLOW</strong>
+        <small>POSE-AWARE CONTINUOUS STRETCHING</small>
+      </div>
+    </div>
+    <div class="bar-actions">
+      <button id="audio-toggle" type="button">444 HZ · ON</button>
+      <button id="enter-vr" class="primary" type="button">ENTER VR</button>
+    </div>
+  </header>
+
+  <aside class="flow-panel">
+    <p class="panel-label">CURRENT CONSTELLATION</p>
+    <div class="pose-row">
+      <span id="pose-number">01</span>
+      <h1 id="pose-name">Arrival</h1>
+    </div>
+    <p id="pose-cue" class="pose-cue">Bring both hands into view to begin.</p>
+    <div class="progress-track" aria-hidden="true"><span id="match-fill"></span></div>
+    <div class="status-row">
+      <span id="tracking-state">WAITING FOR HANDS</span>
+      <span id="safety-state">SAFE REACH PLAN</span>
+    </div>
+
+    <div class="settings">
+      <label>
+        <span>FLOW SPEED <output id="speed-output">BALANCED</output></span>
+        <input id="speed" type="range" min="0" max="100" value="50" />
+      </label>
+      <label>
+        <span>EXTENSION <output id="intensity-output">50%</output></span>
+        <input id="intensity" type="range" min="0" max="100" value="50" />
+      </label>
+      <label>
+        <span>COMPLEXITY <output id="complexity-output">45%</output></span>
+        <input id="complexity" type="range" min="0" max="100" value="45" />
+      </label>
+    </div>
+
+    <button id="start-flow" class="start-flow" type="button">BEGIN FLOW</button>
+    <p class="safety-note">Clear your play area. Move within a comfortable range and stop if anything hurts.</p>
+  </aside>
+
+  <div class="legend" aria-hidden="true">
+    <span><i class="left-hand"></i> LEFT HAND</span>
+    <span><i class="right-hand"></i> RIGHT HAND</span>
+    <span><i class="left-path"></i> GREEN PATH</span>
+    <span><i class="right-path"></i> YELLOW PATH</span>
+  </div>
+
+  <a-scene
+    id="yoga-scene"
+    starfield="count: 2600; radius: 24; depth: 26; drift: 0.01"
+    yoga-pose-guide="speed: 0.5; intensity: 0.5; complexity: 0.45"
+    renderer="antialias: true; colorManagement: true; highRefreshRate: true; alpha: false"
+    background="color: #020208"
+    vr-mode-ui="enterAREnabled: false; enterVREnabled: true"
+    webxr="optionalFeatures: hand-tracking, layers, local-floor, bounded-floor; referenceSpaceType: local-floor"
+  >
+    <a-entity light="type: ambient; color: #b8c5ff; intensity: 0.18"></a-entity>
+    <a-entity id="yoga-rig" position="0 0 0">
+      <a-camera
+        id="yoga-camera"
+        position="0 1.65 0"
+        look-controls="pointerLockEnabled: false"
+        wasd-controls="enabled: false"
+      >
+        <a-entity id="yoga-vr-hud" position="0 -0.36 -1.15">
+          <a-plane width="0.82" height="0.2" color="#070b18" opacity="0.66" material="transparent: true"></a-plane>
+          <a-text id="vr-pose-name" value="ARRIVAL" align="center" position="0 0.035 0.006" width="1.25" color="#f8fafc"></a-text>
+          <a-text id="vr-pose-cue" value="Bring both hands into view" align="center" position="0 -0.035 0.006" width="0.88" color="#a5b4fc"></a-text>
+        </a-entity>
+      </a-camera>
+
+      <a-entity
+        id="left-hand"
+        hand-tracking-controls="hand: left; modelStyle: mesh; modelColor: #ef334f"
+        laser-controls="hand: left"
+        hand-tracker="hand: left; contactRadius: 0.14; contactColor: #ff294d; contactOpacity: 0.34; ringOpacity: 0.92; glowIntensity: 0.8; enableLaser: false"
+        raycaster="enabled: false"
+      ></a-entity>
+
+      <a-entity
+        id="right-hand"
+        hand-tracking-controls="hand: right; modelStyle: mesh; modelColor: #2677ff"
+        laser-controls="hand: right"
+        hand-tracker="hand: right; contactRadius: 0.14; contactColor: #2782ff; contactOpacity: 0.34; ringOpacity: 0.92; glowIntensity: 0.8; enableLaser: false"
+        raycaster="enabled: false"
+      ></a-entity>
+    </a-entity>
+  </a-scene>
+
+  <script type="module" src="/src/apps/yoga.ts"></script>
+</body>
+</html>

@@ -1,15 +1,38 @@
-# VR Handball // A-Frame WebXR 4-Wall Handball Game
+# A-Frame App Hub // Handball + Yoga WebXR Experiences
 
 [![Rust 2021](https://img.shields.io/badge/Rust-2021-orange.svg)](https://www.rust-lang.org/)
 [![Nix Flake](https://img.shields.io/badge/Nix-Flake-blue.svg)](https://nixos.org/)
 [![A-Frame WebXR](https://img.shields.io/badge/WebXR-A--Frame%201.5-pink.svg)](https://aframe.io/)
 [![Meta Quest 3](https://img.shields.io/badge/VR-Meta%20Quest%203-blue.svg)](https://www.meta.com/quest/quest-3/)
 
-**VR Handball** is an MVP WebXR handball game web application powered by an **Axum / Rust** engine, featuring **WebXR Hand Tracking**, real-time **ball collision physics**, **hand-striking impulse dynamics**, procedural **synthesized spatial audio**, and full match scoring rules (USHA 4-Wall regulation).
+This repository is a multi-app **A-Frame / WebXR hub** served by one **Axum / Rust** process. Its default starfield launcher currently exposes two independently routed experiences:
+
+- **Handball** — WebXR hand tracking, real-time ball collision physics, strike dynamics, procedural spatial audio, and USHA-style four-wall match rules.
+- **Yoga** — pose-aware continuous stretching in a starfield, red/blue tracked-hand discs, flowing green/yellow guidance paths, configurable movement intensity, and a synthesized 444 Hz tone bed.
+
+The server owns a generic app registry and isolates handball's authoritative state behind app-scoped routes. Yoga is client-realtime because its guidance planner consumes the user's local WebXR pose every frame.
 
 ---
 
 ## Core Features
+
+### App platform
+
+- Starfield landing page at `/` with launch cards sourced from `GET /api/apps`.
+- Independent Vite HTML entries at `/apps/handball/` and `/apps/yoga/`.
+- Generic metadata registry with per-app runtime and input capability declarations.
+- App-scoped APIs and WebSockets, with legacy handball aliases retained.
+
+### Yoga flow
+
+- Bare-hand tracking and Touch controller fallback share red/blue glowing contact discs.
+- Green and yellow spline ribbons emit moving beads away from each hand toward the next pose.
+- The planner derives targets from a head/torso estimate, then enforces conservative per-arm reach, hand-height, crouch-depth, and paired-hand separation limits.
+- Preset flows encourage lateral reach, torso rotation, rises, and controlled crouches—including a right-hand-out/left-hand-up stance.
+- Speed, extension intensity, and path complexity are live configurable.
+- Procedural audio uses only 444 Hz sine voices; inaudible low-frequency modulators provide slow breathing dynamics.
+
+### Handball
 
 1. **VR Ball & Ball Physics**:
    - Continuous collision detection with front wall, side walls, back glass wall, ceiling, and hardwood floor.
@@ -54,13 +77,16 @@ Provides `cargo`, `rustc`, `nodejs`, `ngrok`, `tmux`, `pkg-config`, `openssl`:
 nix develop
 ```
 
-### 2. Launch Local Handball Server & Web App
+### 2. Launch the Local App Hub
 ```bash
 nix run .
 # Or inside 'nix develop':
 run-app
 ```
-Open **`http://localhost:8080`** in your browser.
+Open **`http://localhost:8080`** for the launcher, or go directly to:
+
+- **`http://localhost:8080/apps/handball/`**
+- **`http://localhost:8080/apps/yoga/`**
 
 ### 3. Launch with HTTPS Tunnel for Meta Quest 3
 WebXR hand tracking requires a secure HTTPS context. Run:
@@ -98,11 +124,24 @@ run-tests
 | **Desktop / Non-VR** | Strike / Serve | `Spacebar` or `Left Mouse Click` |
 | **HUD Controls** | Game Actions | Click Start, Serve, Pause, Reset, Audio Toggle |
 
+Yoga begins from its `BEGIN FLOW` or `ENTER VR` button. Show both hands (or use both controllers), then follow the green left-hand and yellow right-hand paths. The target ring near head height supplies the rise/crouch cue. Use the three desktop sliders to tune pacing and range before entering VR.
+
 ---
 
 ## API & WebSocket Endpoints
 
-- **`GET /api/state`**: Returns current match snapshot JSON.
-- **`GET /api/health`**: Returns server status.
-- **`POST /api/rpc`**: JSON-RPC execution endpoint (`start`, `pause`, `reset`, `serve`, `strike`, `sync_ball`, `set_settings`).
-- **`WS /ws`**: Real-time state broadcasting stream.
+- **`GET /api/health`**: Returns hub status and registered app IDs.
+- **`GET /api/apps`**: Returns all app descriptors and launch paths.
+- **`GET /api/apps/:app_id`**: Returns one app descriptor.
+- **`GET /api/apps/handball/state`**: Returns the current handball match snapshot.
+- **`POST /api/apps/handball/rpc`**: Handball JSON-RPC (`start`, `pause`, `reset`, `serve`, `strike`, `sync_ball`, `set_settings`).
+- **`WS /ws/apps/handball`**: Handball real-time state stream.
+
+`/api/state`, `/api/rpc`, and `/ws` remain compatibility aliases for existing handball clients.
+
+## Adding Another A-Frame App
+
+1. Add an app descriptor in `crates/handball-server/src/apps.rs`.
+2. Add an HTML entry under `web/apps/<id>/` and a TypeScript entry under `web/src/apps/`.
+3. Register the HTML entry in `web/vite.config.ts`.
+4. If the app needs server state, give it an isolated state/service type and mount routes beneath `/api/apps/<id>` and `/ws/apps/<id>`.

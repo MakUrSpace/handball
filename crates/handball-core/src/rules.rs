@@ -160,9 +160,7 @@ impl HandballGameRules {
         self.floor_bounces_since_hit = 0;
         self.front_wall_hit_this_turn = false;
         self.stats.current_rally_shots += 1;
-        if self.settings.freeplay
-            && self.stats.current_rally_shots > self.stats.longest_rally
-        {
+        if self.settings.freeplay && self.stats.current_rally_shots > self.stats.longest_rally {
             self.stats.longest_rally = self.stats.current_rally_shots;
         }
 

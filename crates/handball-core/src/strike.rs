@@ -9,10 +9,10 @@ pub enum HandSide {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum HitQuality {
-    KillShot,   // Maximum power & low trajectory
-    Solid,      // Clean centered hit
-    Glancing,   // Angled deflection
-    Soft,       // Low speed touch
+    KillShot, // Maximum power & low trajectory
+    Solid,    // Clean centered hit
+    Glancing, // Angled deflection
+    Soft,     // Low speed touch
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -35,9 +35,9 @@ pub struct StrikeResult {
 }
 
 pub struct StrikePhysics {
-    pub min_strike_speed: f32,      // Min hand speed in m/s to register strike (e.g., 1.0 m/s)
-    pub power_multiplier: f32,      // Impulse coefficient (e.g., 1.45)
-    pub max_ball_speed: f32,        // Cap maximum ball speed (e.g., 40 m/s ~ 90 mph)
+    pub min_strike_speed: f32, // Min hand speed in m/s to register strike (e.g., 1.0 m/s)
+    pub power_multiplier: f32, // Impulse coefficient (e.g., 1.45)
+    pub max_ball_speed: f32,   // Cap maximum ball speed (e.g., 40 m/s ~ 90 mph)
 }
 
 impl Default for StrikePhysics {
@@ -89,14 +89,15 @@ impl StrikePhysics {
         // Forward strike trajectory calculation:
         // Combine palm normal direction with hand velocity vector
         let mut strike_dir = (hand.velocity.normalize() * 0.6 + normal * 0.4).normalize();
-        
+
         // Ensure strike points generally towards the front wall (-z direction in court coords)
         if strike_dir.z > 0.1 && hand.velocity.z < 0.0 {
             strike_dir.z = -strike_dir.z;
         }
 
         // Calculate transferred velocity
-        let base_speed = (hand_speed * self.power_multiplier + ball.velocity.length() * 0.4).min(self.max_ball_speed);
+        let base_speed = (hand_speed * self.power_multiplier + ball.velocity.length() * 0.4)
+            .min(self.max_ball_speed);
         let final_speed = base_speed.max(3.0); // Minimum pop
         let new_velocity = strike_dir * final_speed;
 

@@ -5,7 +5,16 @@ use handball_core::{
 use std::sync::{Arc, Mutex};
 use tokio::sync::broadcast;
 
+use crate::apps::AppRegistry;
+
 pub struct AppState {
+    pub apps: AppRegistry,
+    pub handball: Arc<HandballAppState>,
+}
+
+/// State owned by the handball app. Other apps can add their own state object
+/// without coupling it to the handball simulation.
+pub struct HandballAppState {
     pub engine: Arc<Mutex<HandballEngineState>>,
     pub tx: broadcast::Sender<String>,
 }

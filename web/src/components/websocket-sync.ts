@@ -28,7 +28,7 @@ AFRAME.registerComponent('websocket-sync', {
     }
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/ws`;
+    const wsUrl = `${protocol}//${window.location.host}/ws/apps/handball`;
 
     try {
       this.socket = new WebSocket(wsUrl);

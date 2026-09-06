@@ -1,6 +1,21 @@
-# VR Handball Architecture
+# A-Frame App Hub Architecture
 
-**VR Handball** is an immersive WebXR A-Frame handball game application powered by a modular Rust engine and real-time WebSocket state streaming. It simulates regulation 4-wall handball (USHA specifications), WebXR hand tracking (Meta Quest 3 joints), physical strike impulse transfer, continuous collision physics, and synthesized spatial audio.
+The project hosts multiple WebXR A-Frame experiences behind one Axum process. The platform layer owns static delivery, health, and an app metadata registry; each experience owns its client entry and any server-side state it needs. Handball uses an authoritative Rust simulation and real-time WebSocket stream. Yoga is a local realtime experience whose safe-range pose planner runs beside WebXR tracking in the headset.
+
+## Multi-App Boundary
+
+```text
+GET /  ──> starfield launcher ──> GET /api/apps
+                  │
+                  ├──> /apps/handball/ ──> /api/apps/handball/* + /ws/apps/handball
+                  │                         └── HandballAppState ──> handball-core
+                  │
+                  └──> /apps/yoga/ ─────> local WebXR pose planner + 444 Hz audio
+
+AppRegistry ──> launch path, runtime model, input capabilities
+```
+
+`AppState` is platform state, not game state. It contains the registry and an isolated `HandballAppState`; future server-backed apps add sibling state/services rather than expanding the handball engine or sharing its broadcast channel.
 
 ---
 

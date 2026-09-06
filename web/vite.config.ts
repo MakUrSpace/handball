@@ -15,5 +15,12 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     emptyOutDir: true,
+    rollupOptions: {
+      input: {
+        launcher: 'index.html',
+        handball: 'apps/handball/index.html',
+        yoga: 'apps/yoga/index.html',
+      },
+    },
   },
 });

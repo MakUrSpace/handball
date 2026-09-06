@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Handball // A-Frame App Hub</title>
+  
+  <!-- A-Frame VR Framework -->
+  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+  
+  <!-- Tailwind CSS CDN for 2D Stadium HUD -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/src/styles/main.css" />
+</head>
+<body class="text-slate-100 overflow-hidden font-sans select-none" style="background-color: #030712;">
+
+  <!-- Top 2D Stadium HUD & Navigation Bar (Desktop / Spectator View) -->
+  <header class="absolute top-0 left-0 right-0 h-16 glass-panel z-20 px-6 flex items-center justify-between border-b border-sky-500/20">
+    
+    <!-- Title & Connection Status -->
+    <div class="flex items-center gap-4">
+      <a href="/" class="game-ui-btn bg-slate-900 text-slate-300 border-slate-700" title="Back to the A-Frame app launcher">← APPS</a>
+      <div class="w-9 h-9 rounded-xl bg-sky-500/20 border border-sky-400/40 flex items-center justify-center text-sky-400 glow-cyan">
+        <span class="text-xl">🤾</span>
+      </div>
+      <div>
+        <h1 class="font-mono text-sm font-bold text-sky-400 tracking-wider">
+          VR HANDBALL // USHA 4-WALL
+        </h1>
+        <div class="flex items-center gap-2 text-[11px] font-mono text-slate-400">
+          <span id="hud-ws-dot" class="w-2 h-2 rounded-full bg-emerald-400 glow-emerald"></span>
+          <span id="hud-ws-text" class="text-emerald-400">LIVE ENGINE READY</span>
+          <span>•</span>
+          <span>META QUEST 3 OPTIMIZED</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Center Live Match Scoreboard & Speedometer -->
+    <div class="flex items-center gap-6 glass-panel-subtle px-5 py-1.5 rounded-xl border border-slate-800">
+      
+      <!-- Player Score -->
+      <div class="flex flex-col items-center">
+        <span class="text-[10px] font-mono text-sky-400 font-bold uppercase tracking-wider">PLAYER</span>
+        <span id="hud-player-score" class="font-mono text-2xl font-black text-slate-100 leading-tight">0</span>
+      </div>
+
+      <div class="text-slate-600 font-mono font-bold text-lg">:</div>
+
+      <!-- Opponent Score -->
+      <div class="flex flex-col items-center">
+        <span class="text-[10px] font-mono text-rose-400 font-bold uppercase tracking-wider">OPPONENT</span>
+        <span id="hud-opponent-score" class="font-mono text-2xl font-black text-slate-100 leading-tight">0</span>
+      </div>
+
+      <div class="h-7 w-[1px] bg-slate-800"></div>
+
+      <!-- Live Speedometer -->
+      <div class="flex flex-col items-center">
+        <span class="text-[10px] font-mono text-amber-400 font-bold uppercase tracking-wider">BALL SPEED</span>
+        <span id="hud-ball-speed" class="font-mono text-xl font-bold text-amber-300 leading-tight">0.0 MPH</span>
+      </div>
+
+      <div class="h-7 w-[1px] bg-slate-800"></div>
+
+      <!-- Rally Counter -->
+      <div class="flex flex-col items-center">
+        <span class="text-[10px] font-mono text-emerald-400 font-bold uppercase tracking-wider">RALLY</span>
+        <span id="hud-rally-count" class="font-mono text-xl font-bold text-emerald-300 leading-tight">0</span>
+      </div>
+
+      <div class="h-7 w-[1px] bg-slate-800"></div>
+
+      <!-- State Badge -->
+      <div>
+        <span id="hud-status-badge" class="px-3 py-1 rounded-full text-xs font-mono font-bold bg-sky-500/20 text-sky-400 border border-sky-500/40 glow-cyan">
+          IDLE
+        </span>
+      </div>
+    </div>
+
+    <!-- Match Controls & Buttons -->
+    <div class="flex items-center gap-2">
+      <!-- Direct Headset Launch Buttons -->
+      <button id="btn-enter-ar" class="game-ui-btn bg-fuchsia-600 text-slate-50 hover:bg-fuchsia-500 border-fuchsia-400/50 shadow-lg shadow-fuchsia-950 font-bold glow-cyan" title="Launch Meta Quest 3 Mixed Reality Color Passthrough">
+        🥽 ENTER PASSTHROUGH (AR)
+      </button>
+
+      <button id="btn-enter-vr" class="game-ui-btn bg-sky-600 text-slate-50 hover:bg-sky-500 border-sky-400/50" title="Launch Full VR Stadium Experience">
+        🕶️ ENTER VR
+      </button>
+
+      <button id="btn-start" class="game-ui-btn bg-slate-900 text-sky-400 hover:bg-slate-800 border-slate-700">
+        ▶ START
+      </button>
+
+      <button id="btn-serve" class="game-ui-btn bg-emerald-600/90 text-slate-50 hover:bg-emerald-500 border-emerald-400/40">
+        🏐 SERVE
+      </button>
+
+      <button id="btn-pause" class="game-ui-btn bg-slate-900 text-slate-200 hover:bg-slate-800 border-slate-700">
+        ⏸ PAUSE
+      </button>
+
+      <button id="btn-reset" class="game-ui-btn bg-slate-900 text-slate-200 hover:bg-slate-800 border-slate-700">
+        🔄 RESET
+      </button>
+
+      <button id="btn-freeplay" class="game-ui-btn bg-emerald-950/80 text-emerald-300 border-emerald-500/40" title="Disable scoring, faults, and rally termination while retaining stats">
+        ∞ FREEPLAY: OFF
+      </button>
+
+      <button id="btn-bot-difficulty" class="game-ui-btn bg-violet-950/80 text-violet-300 border-violet-500/40" title="Cycle bot difficulty and return error rate">
+        🤖 BOT: MEDIUM
+      </button>
+
+      <button id="btn-mode" class="game-ui-btn bg-indigo-950/80 text-indigo-300 border-indigo-500/40" title="Toggle Narrow / Regulation Court">
+        📏 MODE: NARROW
+      </button>
+
+      <button id="btn-passthrough" class="game-ui-btn bg-fuchsia-950/80 text-fuchsia-300 border-fuchsia-500/40" title="Toggle Meta Quest 3 MR Passthrough">
+        🥽 PASSTHROUGH: OFF
+      </button>
+
+      <button id="btn-neon" class="game-ui-btn bg-amber-950/80 text-amber-300 border-amber-500/40" title="Toggle Sci-Fi Neon Cyber Court Theme">
+        ⚡ NEON: OFF
+      </button>
+
+      <button id="btn-kiosk" class="game-ui-btn bg-slate-900 text-slate-300 border-slate-600" title="Hide the wall kiosk and disable its controls">
+        🧱 KIOSK: ON
+      </button>
+
+      <button id="btn-audio" class="game-ui-btn bg-sky-950/80 text-sky-300 border-sky-500/40">
+        🔊 AUDIO
+      </button>
+
+      <button id="btn-help" class="game-ui-btn bg-slate-800 text-slate-300 border-slate-600" title="Help & Controls">
+        ❓ HELP
+      </button>
+    </div>
+  </header>
+
+  <!-- Bottom Match Notification Bar -->
+  <div class="absolute bottom-4 left-6 right-6 h-10 glass-panel z-20 px-5 flex items-center justify-between rounded-lg border border-sky-500/20 pointer-events-none">
+    <div class="flex items-center gap-3">
+      <span class="text-sky-400 font-mono text-xs font-bold">MATCH EVENT:</span>
+      <span id="hud-event-msg" class="text-slate-200 font-mono text-xs">Ready to serve. Press 'Serve Ball' or strike in VR.</span>
+    </div>
+    <div class="flex items-center gap-4 text-xs font-mono text-slate-400">
+      <span>TOP SPEED: <strong id="hud-max-speed" class="text-sky-300">0.0 MPH</strong></span>
+      <span>•</span>
+      <span>CENTER HITS: <strong id="hud-center-hits" class="text-violet-300">0</strong></span>
+      <span>•</span>
+      <span>RALLIES: <strong id="hud-total-rallies" class="text-emerald-300">0</strong></span>
+      <span>•</span>
+      <span>BOT: <strong id="hud-bot-state" class="text-violet-300">ACTIVE</strong></span>
+      <span>•</span>
+      <span>FREEPLAY: <strong id="hud-freeplay-state" class="text-slate-300">OFF</strong></span>
+      <span>•</span>
+      <span>SHORT LINE: <strong>20 FT</strong></span>
+      <span>•</span>
+      <span>TARGET: <strong>21 PTS</strong></span>
+    </div>
+  </div>
+
+  <!-- Help & VR Controls Modal -->
+  <div id="help-modal" class="vr-help-modal glass-panel p-6 rounded-2xl border border-sky-500/30 glow-cyan hidden">
+    <div class="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
+      <h2 class="font-mono text-lg font-bold text-sky-400 flex items-center gap-2">
+        <span>🎮</span> VR HANDBALL CONTROLS
+      </h2>
+      <button id="btn-close-help" class="text-slate-400 hover:text-slate-100 font-mono font-bold text-lg">✕</button>
+    </div>
+
+    <div class="space-y-4 text-sm text-slate-300">
+      <div class="p-3 rounded-lg bg-fuchsia-950/40 border border-fuchsia-500/40">
+        <h3 class="font-bold text-fuchsia-300 font-mono mb-1">🥽 Meta Quest 3 Mixed Reality Passthrough</h3>
+        <p class="text-xs text-slate-300">Click <strong>'ENTER PASSTHROUGH (AR)'</strong> on the top bar or inside VR to see your real-world room with color cameras while playing against glowing holographic neon court boundaries!</p>
+      </div>
+
+      <div class="p-3 rounded-lg bg-slate-900/80 border border-slate-800">
+        <h3 class="font-bold text-sky-300 font-mono mb-1">🕶️ Meta Quest 3 Bare Hands Tracking</h3>
+        <p class="text-xs text-slate-400">Use bare hands! Swing palm or fist forward to strike the ball against the front wall. Aim the palm to steer its laser and pitch the contact disk; rotate through impact to add spin. Extend the left hand to glance at the upper forearm/shoulder HUD.</p>
+      </div>
+
+      <div class="p-3 rounded-lg bg-slate-900/80 border border-slate-800">
+        <h3 class="font-bold text-emerald-300 font-mono mb-1">🕹️ Touch Plus Controllers & Haptics</h3>
+        <p class="text-xs text-slate-400">Swing either controller's contact disk into the ball for a haptic strike. To serve or reset, physically tap the controls on the left wrist with the right contact disk; selector rays and controller triggers cannot activate those wrist buttons.</p>
+      </div>
+
+      <div class="p-3 rounded-lg bg-slate-900/80 border border-slate-800">
+        <h3 class="font-bold text-amber-300 font-mono mb-1">💻 Desktop / Non-VR Testing Mode</h3>
+        <p class="text-xs text-slate-400">
+          - <strong>WASD</strong>: Move in court<br>
+          - <strong>Mouse Look</strong>: Aim direction<br>
+          - <strong>Left Click or Spacebar</strong>: Strike ball / Serve
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2D Aim Crosshair -->
+  <div class="crosshair"></div>
+
+  <!-- A-Frame VR Scene -->
+  <a-scene
+    id="game-scene"
+    handball-court
+    handball-game-manager
+    handball-hud
+    websocket-sync
+    renderer="antialias: true; colorManagement: true; highRefreshRate: true; alpha: true"
+    vr-mode-ui="enterAREnabled: true; enterVREnabled: true"
+    webxr="optionalFeatures: hit-test, hand-tracking, layers, local-floor, bounded-floor, passthrough, background-blend-mode; referenceSpaceType: local-floor"
+  >
+    <a-assets timeout="10000"></a-assets>
+
+    <!-- Player Camera Rig (Initial position in service zone at z = 6.8m) -->
+    <a-entity id="player-rig" position="0 0 6.8">
+      
+      <!-- Head / VR Camera -->
+      <a-camera
+        id="player-camera"
+        position="0 1.6 0"
+        look-controls="pointerLockEnabled: false"
+        wasd-controls="fly: false; acceleration: 50"
+        cursor="rayOrigin: mouse"
+        raycaster="objects: .clickable, .vr-btn; far: 12"
+      ></a-camera>
+
+      <!-- WebXR Left Hand & Controller -->
+      <a-entity
+        id="left-hand"
+        hand-tracking-controls="hand: left; modelStyle: mesh"
+        hand-tracker="hand: left"
+        laser-controls="hand: left"
+        raycaster="objects: .clickable, .vr-btn; far: 8; showLine: false"
+      ></a-entity>
+
+      <!-- WebXR Right Hand & Controller -->
+      <a-entity
+        id="right-hand"
+        hand-tracking-controls="hand: right; modelStyle: mesh"
+        hand-tracker="hand: right"
+        laser-controls="hand: right"
+        raycaster="objects: .clickable, .vr-btn; far: 8; showLine: false"
+      ></a-entity>
+    </a-entity>
+
+    <!-- VR Handball Object (Physics & Continuous Hand Striker) -->
+    <a-entity
+      id="handball"
+      position="0.2 1.25 6.2"
+      handball-physics="radius: 0.025; mass: 0.065"
+      hand-striker="minStrikeSpeed: 0.4; contactElasticity: 1.12; powerMultiplier: 0.16; maxBallSpeed: 27; spinMultiplier: 0.9; strikeRadius: 0.22"
+    ></a-entity>
+
+    <!-- Visible, moving opponent used by Practice Bot mode -->
+    <a-entity id="practice-bot" practice-bot="enabled: true" visible="true"></a-entity>
+
+  </a-scene>
+
+  <!-- Vite production entrypoint -->
+  <script type="module" src="/src/apps/handball.ts"></script>
+</body>
+</html>

@@ -1,0 +1,150 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;600;700&display=swap');
+
+:root {
+  color: #f8fafc;
+  background: #02030b;
+  font-family: 'Manrope', sans-serif;
+  font-synthesis: none;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  width: 100%;
+  min-height: 100%;
+  margin: 0;
+  background: #02030b;
+}
+
+body { overflow-x: hidden; }
+
+a-scene {
+  position: fixed !important;
+  inset: 0;
+  width: 100% !important;
+  height: 100% !important;
+  z-index: 0;
+  background: radial-gradient(circle at 50% 35%, #11172e 0%, #050713 42%, #02030b 100%);
+}
+
+.launcher-shell {
+  position: relative;
+  z-index: 2;
+  width: min(1180px, calc(100% - 40px));
+  min-height: 100vh;
+  margin: 0 auto;
+  padding: 9vh 0 36px;
+}
+
+.launcher-heading { max-width: 720px; }
+
+.eyebrow, .app-kind, .app-index, .launch-label, .server-status, footer {
+  font-family: 'DM Mono', monospace;
+  letter-spacing: 0.12em;
+}
+
+.eyebrow {
+  margin: 0 0 14px;
+  color: #8bd5ff;
+  font-size: 0.73rem;
+}
+
+h1 {
+  margin: 0;
+  font-size: clamp(3rem, 8vw, 6.7rem);
+  line-height: 0.94;
+  letter-spacing: -0.065em;
+}
+
+.lede {
+  max-width: 600px;
+  margin: 25px 0 20px;
+  color: #aeb7ca;
+  font-size: clamp(1rem, 2vw, 1.25rem);
+  line-height: 1.6;
+}
+
+.server-status {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  color: #94a3b8;
+  font-size: 0.67rem;
+}
+
+.server-status::before {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #fbbf24;
+  box-shadow: 0 0 12px #fbbf24;
+  content: '';
+}
+
+.server-status[data-connected='true']::before {
+  background: #4ade80;
+  box-shadow: 0 0 12px #4ade80;
+}
+
+.app-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 15px;
+  margin-top: 58px;
+}
+
+.app-card {
+  position: relative;
+  display: flex;
+  min-height: 335px;
+  padding: 25px;
+  overflow: hidden;
+  flex-direction: column;
+  justify-content: space-between;
+  color: inherit;
+  text-decoration: none;
+  background: rgba(9, 13, 28, 0.74);
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 22px;
+  backdrop-filter: blur(15px);
+  transition: transform .24s ease, border-color .24s ease, background .24s ease;
+}
+
+a.app-card:hover {
+  transform: translateY(-7px);
+  background: rgba(14, 20, 40, 0.9);
+}
+
+.app-card--handball:hover { border-color: rgba(56, 189, 248, .7); }
+.app-card--yoga:hover { border-color: rgba(163, 230, 53, .55); }
+.app-card--future { opacity: .52; }
+
+.app-index { color: #778198; font-size: .68rem; }
+
+.app-orbit {
+  position: absolute;
+  top: 18px;
+  right: 20px;
+  color: #93c5fd;
+  font-size: 4.5rem;
+  line-height: 1;
+  filter: drop-shadow(0 0 22px currentColor);
+  opacity: .76;
+}
+
+.app-orbit--ball { color: #38bdf8; }
+.app-orbit--breath { color: #bef264; }
+
+.app-kind { margin: 0 0 8px; color: #8290aa; font-size: .62rem; }
+.app-card h2 { margin: 0 0 12px; font-size: 2rem; letter-spacing: -.04em; }
+.app-card p:not(.app-kind) { margin: 0; color: #aeb7ca; line-height: 1.55; }
+.launch-label { color: #dce5f7; font-size: .63rem; }
+.launch-label b { margin-left: 5px; font-size: 1rem; }
+
+footer { margin-top: 28px; color: #69748b; font-size: .63rem; }
+
+@media (max-width: 800px) {
+  .launcher-shell { padding-top: 7vh; }
+  .app-grid { grid-template-columns: 1fr; margin-top: 40px; }
+  .app-card { min-height: 270px; }
+}

@@ -9,8 +9,16 @@ pub struct Vec3 {
 }
 
 impl Vec3 {
-    pub const ZERO: Self = Self { x: 0.0, y: 0.0, z: 0.0 };
-    pub const UP: Self = Self { x: 0.0, y: 1.0, z: 0.0 };
+    pub const ZERO: Self = Self {
+        x: 0.0,
+        y: 0.0,
+        z: 0.0,
+    };
+    pub const UP: Self = Self {
+        x: 0.0,
+        y: 1.0,
+        z: 0.0,
+    };
 
     pub fn new(x: f32, y: f32, z: f32) -> Self {
         Self { x, y, z }
@@ -114,7 +122,7 @@ impl Default for Ball {
             position: Vec3::new(0.0, 1.2, 5.0),
             velocity: Vec3::ZERO,
             radius: 0.025, // 2.5 cm radius
-            mass: 0.065,  // 65 grams
+            mass: 0.065,   // 65 grams
             spin: Vec3::ZERO,
         }
     }
@@ -122,8 +130,8 @@ impl Default for Ball {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PhysicsConfig {
-    pub gravity: f32,             // -9.81 m/s^2
-    pub air_drag: f32,            // Drag coefficient
+    pub gravity: f32,                // -9.81 m/s^2
+    pub air_drag: f32,               // Drag coefficient
     pub front_wall_restitution: f32, // 0.93
     pub side_wall_restitution: f32,  // 0.88
     pub floor_restitution: f32,      // 0.92

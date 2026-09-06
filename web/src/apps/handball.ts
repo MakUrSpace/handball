@@ -1,18 +1,18 @@
 /**
- * VR Handball WebApp Entry Point
+ * Handball app entry point.
  * Imports A-Frame components, sound engine, and UI handlers.
  */
 
-import './styles/main.css';
-import { soundEngine } from './components/spatial-audio';
-import './components/court';
-import './components/ball-physics';
-import './components/hand-tracker';
-import './components/hand-striker';
-import './components/practice-bot';
-import './components/game-manager';
-import './components/hud';
-import './components/websocket-sync';
+import '../styles/main.css';
+import { soundEngine } from '../components/spatial-audio';
+import '../components/court';
+import '../components/ball-physics';
+import '../components/hand-tracker';
+import '../components/hand-striker';
+import '../components/practice-bot';
+import '../components/game-manager';
+import '../components/hud';
+import '../components/websocket-sync';
 
 // Global audio activation on first user interaction or WebXR session start
 window.addEventListener('click', () => {

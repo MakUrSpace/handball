@@ -1,4 +1,4 @@
-use crate::state::AppState;
+use crate::state::HandballAppState;
 use handball_core::{
     CourtDimensions, HandState, MatchSettings, MatchSnapshot, PlayerRole, StrikePhysics, Vec3,
 };
@@ -20,7 +20,10 @@ pub struct RpcResponse {
     pub error: Option<String>,
 }
 
-pub async fn execute_rpc(state: Arc<AppState>, req: RpcRequest) -> Result<serde_json::Value, String> {
+pub async fn execute_rpc(
+    state: Arc<HandballAppState>,
+    req: RpcRequest,
+) -> Result<serde_json::Value, String> {
     info!("RPC method invocation: '{}'", req.method);
     let mut engine = state.engine.lock().map_err(|e| e.to_string())?;
 
@@ -134,7 +137,7 @@ pub async fn execute_rpc(state: Arc<AppState>, req: RpcRequest) -> Result<serde_
     }
 }
 
-fn broadcast_state(state: &AppState, snap: &MatchSnapshot) {
+fn broadcast_state(state: &HandballAppState, snap: &MatchSnapshot) {
     if let Ok(json_str) = serde_json::to_string(snap) {
         let _ = state.tx.send(json_str);
     }

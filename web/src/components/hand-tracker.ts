@@ -48,6 +48,10 @@ AFRAME.registerComponent('hand-tracker', {
     contactRadius: { type: 'number', default: 0.22 }, // Visible ball-contact area (22 cm)
     controllerContactOffset: { type: 'number', default: 0.055 }, // Move disc from grip center toward controller face
     enableLaser: { type: 'boolean', default: true },
+    contactColor: { type: 'color', default: '#4ade80' },
+    contactOpacity: { type: 'number', default: 0.08 },
+    ringOpacity: { type: 'number', default: 0.4 },
+    glowIntensity: { type: 'number', default: 0 },
   },
 
   init: function () {
@@ -78,10 +82,10 @@ AFRAME.registerComponent('hand-tracker', {
     const auraRadius = this.data.contactRadius;
     const palmGeo = new THREE.CircleGeometry(auraRadius, 48);
     const palmMat = new THREE.MeshBasicMaterial({
-      color: 0x4ade80, // Faint emerald green
+      color: new THREE.Color(this.data.contactColor),
       side: THREE.DoubleSide,
       transparent: true,
-      opacity: 0.08,
+      opacity: this.data.contactOpacity,
       depthTest: false,
       depthWrite: false,
     });
@@ -90,14 +94,25 @@ AFRAME.registerComponent('hand-tracker', {
     this.auraMesh.renderOrder = 20;
     this.auraMesh.visible = false;
 
+    if (this.data.glowIntensity > 0) {
+      this.auraGlow = new THREE.PointLight(
+        new THREE.Color(this.data.contactColor),
+        this.data.glowIntensity,
+        1.1,
+        2,
+      );
+      this.auraGlow.position.set(0, 0, 0.025);
+      this.auraMesh.add(this.auraGlow);
+    }
+
     // A crisp perimeter keeps the contact radius readable against either a
     // rendered court or a passthrough camera feed.
     const ringGeo = new THREE.RingGeometry(auraRadius, auraRadius + 0.015, 32);
     const ringMat = new THREE.MeshBasicMaterial({
-      color: 0x22c55e, // Vibrant neon green
+      color: new THREE.Color(this.data.contactColor),
       side: THREE.DoubleSide,
       transparent: true,
-      opacity: 0.4,
+      opacity: this.data.ringOpacity,
       depthTest: false,
       depthWrite: false,
     });
