@@ -176,6 +176,18 @@ AFRAME.registerComponent('yoga-pose-guide', {
     this.rightEl = document.querySelector('#right-hand') as any;
     this.leftRibbon = new GuideRibbon(this.el.object3D, '#72f58b');
     this.rightRibbon = new GuideRibbon(this.el.object3D, '#ffe66e');
+    this.lastPlayspaceState = 'inactive';
+    this.onPlayspaceReady = () => this.planPose(this.poseIndex);
+    this.onPlayspaceStateChange = (event: any) => {
+      const state = event.detail?.state || 'inactive';
+      const shouldReplan = state !== this.lastPlayspaceState
+        && (state === 'safe' || state === 'warning' || state === 'outside');
+      this.lastPlayspaceState = state;
+      if (shouldReplan) this.planPose(this.poseIndex);
+      else this.updateUi(0, this.getHands());
+    };
+    this.el.addEventListener('playspace-ready', this.onPlayspaceReady);
+    this.el.addEventListener('playspace-state-change', this.onPlayspaceStateChange);
 
     this.headMarkerMaterial = new THREE.MeshBasicMaterial({
       color: new THREE.Color('#9aa9ff'),
@@ -309,6 +321,8 @@ AFRAME.registerComponent('yoga-pose-guide', {
       leftTarget = leftShoulder.clone().addScaledVector(plannedRight, -0.3);
       rightTarget = rightShoulder.clone().addScaledVector(plannedRight, 0.3);
       leftTarget.y = rightTarget.y = torso.y;
+      leftTarget = this.constrainTarget(leftTarget, leftShoulder);
+      rightTarget = this.constrainTarget(rightTarget, rightShoulder);
       targetHead.y = this.baselineHeadHeight;
     }
 
@@ -329,11 +343,15 @@ AFRAME.registerComponent('yoga-pose-guide', {
     const leftStart = hands.left?.isTracked ? hands.left.position : this.getFallbackHand('left', frame);
     const rightStart = hands.right?.isTracked ? hands.right.position : this.getFallbackHand('right', frame);
     this.leftRibbon.setPath(
-      this.makeCurve(leftStart, leftTarget, plannedRight, -1, complexity),
+      this.constrainGuidePath(
+        this.makeCurve(leftStart, leftTarget, plannedRight, -1, complexity),
+      ),
       0.009 + intensity * 0.009,
     );
     this.rightRibbon.setPath(
-      this.makeCurve(rightStart, rightTarget, plannedRight, 1, complexity),
+      this.constrainGuidePath(
+        this.makeCurve(rightStart, rightTarget, plannedRight, 1, complexity),
+      ),
       0.009 + intensity * 0.009,
     );
     this.headMarker.position.copy(targetHead).addScaledVector(frame.forward, 0.85);
@@ -342,15 +360,17 @@ AFRAME.registerComponent('yoga-pose-guide', {
   },
 
   constrainTarget: function (target: any, shoulder: any) {
-    target.y = clamp(target.y, MIN_HAND_HEIGHT, this.baselineHeadHeight + 0.25);
-    const offset = target.clone().sub(shoulder);
-    const distance = offset.length();
-    if (distance > MAX_REACH) target.copy(shoulder).add(offset.setLength(MAX_REACH));
-    else if (distance < MIN_REACH) target.copy(shoulder).add(offset.setLength(MIN_REACH));
-    target.y = clamp(target.y, MIN_HAND_HEIGHT, this.baselineHeadHeight + 0.25);
-    const correctedOffset = target.clone().sub(shoulder);
-    if (correctedOffset.length() > MAX_REACH) {
-      target.copy(shoulder).add(correctedOffset.setLength(MAX_REACH));
+    const playspace = this.el.components?.['playspace-safety'];
+    for (let pass = 0; pass < 4; pass++) {
+      target.y = clamp(target.y, MIN_HAND_HEIGHT, this.baselineHeadHeight + 0.25);
+      const offset = target.clone().sub(shoulder);
+      const distance = offset.length();
+      if (distance > MAX_REACH) target.copy(shoulder).add(offset.setLength(MAX_REACH));
+      else if (distance < MIN_REACH) target.copy(shoulder).add(offset.setLength(MIN_REACH));
+      target.y = clamp(target.y, MIN_HAND_HEIGHT, this.baselineHeadHeight + 0.25);
+
+      const boundaryResult = playspace?.constrainWorldPoint?.(target);
+      if (boundaryResult?.available) target.copy(boundaryResult.point);
     }
     return target;
   },
@@ -358,6 +378,9 @@ AFRAME.registerComponent('yoga-pose-guide', {
   isPlanSafe: function (left: any, right: any, leftShoulder: any, rightShoulder: any, head: any) {
     const leftReach = left.distanceTo(leftShoulder);
     const rightReach = right.distanceTo(rightShoulder);
+    const playspace = this.el.components?.['playspace-safety'];
+    const targetsInsidePlayspace = !playspace?.isAvailable?.()
+      || (playspace.isWorldPointSafe(left) && playspace.isWorldPointSafe(right));
     return leftReach >= MIN_REACH - 0.01
       && rightReach >= MIN_REACH - 0.01
       && leftReach <= MAX_REACH + 0.01
@@ -365,7 +388,22 @@ AFRAME.registerComponent('yoga-pose-guide', {
       && left.distanceTo(right) >= 0.16
       && left.y >= MIN_HAND_HEIGHT
       && right.y >= MIN_HAND_HEIGHT
-      && head.y >= this.baselineHeadHeight - 0.36;
+      && head.y >= this.baselineHeadHeight - 0.36
+      && targetsInsidePlayspace;
+  },
+
+  constrainGuidePath: function (points: any[]) {
+    const playspace = this.el.components?.['playspace-safety'];
+    if (!playspace?.isAvailable?.()) return points;
+
+    // Preserve the live hand position at the beginning of the ribbon. Clamp
+    // every point that follows so the guide itself never invites a sweep past
+    // the configured boundary.
+    return points.map((point, index) => {
+      if (index === 0) return point;
+      const result = playspace.constrainWorldPoint(point);
+      return result.available ? result.point : point;
+    });
   },
 
   makeCurve: function (start: any, target: any, rightAxis: any, side: number, complexity: number) {
@@ -441,15 +479,33 @@ AFRAME.registerComponent('yoga-pose-guide', {
     setText('#tracking-state', hands.left?.isTracked && hands.right?.isTracked
       ? 'BOTH HANDS TRACKED'
       : 'SHOW BOTH HANDS');
-    setText('#safety-state', this.plan.safe ? 'SAFE REACH PLAN' : 'NEUTRAL FALLBACK');
+    const playspaceState = this.el.components?.['playspace-safety']?.getState?.() || 'inactive';
+    const safetyLabel = playspaceState === 'unavailable'
+      ? 'BODY SAFE · BOUNDARY UNKNOWN'
+      : playspaceState === 'outside'
+        ? 'RETURN TO PLAYSPACE'
+        : playspaceState === 'warning'
+          ? 'PLAYSPACE EDGE NEAR'
+          : this.plan.safe && playspaceState === 'safe'
+            ? 'SAFE IN PLAYSPACE'
+            : this.plan.safe
+              ? 'SAFE REACH PLAN'
+              : 'NEUTRAL FALLBACK';
+    const safetyVerified = this.plan.safe
+      && playspaceState !== 'warning'
+      && playspaceState !== 'outside'
+      && playspaceState !== 'unavailable';
+    setText('#safety-state', safetyLabel);
     const fill = document.querySelector<HTMLElement>('#match-fill');
     if (fill) fill.style.width = `${Math.round(completion * 100)}%`;
-    document.querySelector('#safety-state')?.setAttribute('data-safe', String(this.plan.safe));
+    document.querySelector('#safety-state')?.setAttribute('data-safe', String(safetyVerified));
     document.querySelector('#vr-pose-name')?.setAttribute('value', this.plan.name.toUpperCase());
     document.querySelector('#vr-pose-cue')?.setAttribute('value', this.plan.cue);
   },
 
   remove: function () {
+    this.el.removeEventListener('playspace-ready', this.onPlayspaceReady);
+    this.el.removeEventListener('playspace-state-change', this.onPlayspaceStateChange);
     this.leftRibbon?.dispose();
     this.rightRibbon?.dispose();
     if (this.headMarker) this.el.object3D.remove(this.headMarker);

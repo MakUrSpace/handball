@@ -7,6 +7,7 @@ import '../styles/main.css';
 import { soundEngine } from '../components/spatial-audio';
 import '../components/court';
 import '../components/ball-physics';
+import '../components/playspace-safety';
 import '../components/hand-tracker';
 import '../components/hand-striker';
 import '../components/practice-bot';

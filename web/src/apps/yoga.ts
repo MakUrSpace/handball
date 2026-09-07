@@ -1,6 +1,7 @@
 import '../styles/yoga.css';
 import '../components/starfield';
 import '../components/hand-tracker';
+import '../components/playspace-safety';
 import '../yoga/pose-guide';
 import { toneBed } from '../yoga/tone-bed';
 
